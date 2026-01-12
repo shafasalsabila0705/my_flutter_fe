@@ -1,0 +1,90 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
+import '../../../../../core/constants/strings.dart';
+import '../../../../../core/utils/input_validator.dart';
+import '../../../../../core/providers/user_provider.dart';
+import '../../../../../injection_container.dart'; // To access sl<UserProvider>
+import '../../../domain/entities/user.dart';
+import 'login_presenter.dart';
+
+class LoginController extends Controller {
+  final LoginPresenter _presenter;
+
+  LoginController(this._presenter);
+
+  // Text Controllers
+  final TextEditingController nipController =
+      TextEditingController(); // Changed
+  final TextEditingController passwordController = TextEditingController();
+
+  // State
+  bool isLoading = false;
+  String? errorMessage;
+  User? currentUser;
+
+  @override
+  void initListeners() {
+    _presenter.onLoginSuccess = (User user) {
+      isLoading = false;
+      currentUser = user;
+
+      // Update Global State
+      sl<UserProvider>().setUser(user);
+
+      errorMessage = null;
+      refreshUI();
+      Navigator.of(getContext()).pushReplacementNamed('/dashboard');
+    };
+
+    _presenter.onLoginError = (e) {
+      isLoading = false;
+      errorMessage = e.toString();
+      refreshUI();
+      ScaffoldMessenger.of(getContext()).showSnackBar(
+        SnackBar(content: Text('${AppStrings.loginFailed}$errorMessage')),
+      );
+    };
+  }
+
+  void login() {
+    final nipError = InputValidator.validateNip(nipController.text);
+    final passwordError = InputValidator.validatePassword(
+      passwordController.text,
+    );
+
+    if (nipError == null && passwordError == null) {
+      isLoading = true;
+      errorMessage = null;
+      refreshUI();
+      _presenter.login(nipController.text, passwordController.text);
+    } else {
+      errorMessage = nipError ?? passwordError;
+      refreshUI();
+    }
+  }
+
+  void navigateToRegister() {
+    Navigator.of(
+      getContext(),
+    ).pushNamed('/register'); // Using named route preferred, or direct push
+    // For simplicity without route generator:
+    // Navigator.push(getContext(), MaterialPageRoute(builder: (_) => RegisterPage()));
+    // But RegisterPage needs new import.
+    // I will use Navigator.push with import in Controller? No, Controller shouldn't import UI (View).
+    // Better: Controller calls a listener method 'onNavigateToRegister' which View implements.
+    // OR: Controller uses Navigator with string route.
+    // I'll stick to direct push in View for simplicity if Controller is hard.
+    // But keeping logic in Controller:
+    // I will use Named Route '/register' and define it in main.dart?
+    // That's cleaner.
+    Navigator.pushNamed(getContext(), '/register');
+  }
+
+  @override
+  void onDisposed() {
+    nipController.dispose();
+    passwordController.dispose();
+    _presenter.dispose(); // Ensure presenter is disposed
+    super.onDisposed();
+  }
+}
