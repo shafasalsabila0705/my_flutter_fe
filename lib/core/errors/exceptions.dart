@@ -1,15 +1,25 @@
-class ServerException implements Exception {
+class AppException implements Exception {
   final String message;
-  ServerException(this.message);
-  
+  final dynamic originalError;
+
+  AppException(this.message, {this.originalError});
+
   @override
-  String toString() => 'ServerException: $message';
+  String toString() => '$runtimeType: $message';
 }
 
-class NetworkException implements Exception {
-  final String message;
-  NetworkException(this.message);
+class ServerException extends AppException {
+  ServerException(super.message, {super.originalError});
+}
 
-  @override
-  String toString() => 'NetworkException: $message';
+class NetworkException extends AppException {
+  NetworkException(super.message, {super.originalError});
+}
+
+class CacheException extends AppException {
+  CacheException(super.message, {super.originalError});
+}
+
+class ValidationException extends AppException {
+  ValidationException(super.message, {super.originalError});
 }

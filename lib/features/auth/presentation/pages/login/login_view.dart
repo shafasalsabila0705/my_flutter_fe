@@ -3,7 +3,10 @@ import 'package:flutter_clean_architecture/flutter_clean_architecture.dart'
     as fca;
 import '../../../../../core/constants/strings.dart';
 import '../../../../../injection_container.dart';
-import 'package:lottie/lottie.dart';
+
+import '../../../../../core/widgets/custom_button.dart';
+import '../../../../../core/widgets/custom_text_field.dart';
+import '../../widgets/auth_header.dart';
 import 'login_controller.dart';
 
 class LoginView extends fca.View {
@@ -42,34 +45,11 @@ class _LoginViewState extends fca.ViewState<LoginView, LoginController> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Illustration Replacement (Icon for safety as Asset setup requires restart & config)
-                  // Illustration (Lottie Animation)
-                  Lottie.asset(
-                    'assets/animations/logo_registerlogin.json',
-                    width: 250,
-                    height: 250,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Title
-                  const Text(
-                    AppStrings.loginTitle,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    AppStrings.ssoTitle,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const Text(
-                    AppStrings.version,
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  // Auth Header
+                  const AuthHeader(
+                    title: AppStrings.loginTitle,
+                    subtitle: AppStrings.ssoTitle,
+                    version: AppStrings.version,
                   ),
 
                   const SizedBox(height: 48),
@@ -85,63 +65,26 @@ class _LoginViewState extends fca.ViewState<LoginView, LoginController> {
                     ),
 
                   // NIP Field
-                  TextField(
+                  CustomTextField(
                     controller: controller.nipController,
-                    decoration: InputDecoration(
-                      labelText: AppStrings.nipLabel,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
+                    label: AppStrings.nipLabel,
                   ),
                   const SizedBox(height: 16),
 
                   // Password Field
-                  TextField(
+                  CustomTextField(
                     controller: controller.passwordController,
-                    decoration: InputDecoration(
-                      labelText: AppStrings.passwordLabel,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
+                    label: AppStrings.passwordLabel,
                     obscureText: true,
                   ),
                   const SizedBox(height: 32),
 
                   // Login Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: controller.isLoading ? null : controller.login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue, // Match design blue
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30.0),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: controller.isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.login),
-                                SizedBox(width: 8),
-                                Text(AppStrings.loginButton),
-                              ],
-                            ),
-                    ),
+                  CustomButton(
+                    text: AppStrings.loginButton,
+                    onPressed: controller.login,
+                    isLoading: controller.isLoading,
+                    icon: Icons.login,
                   ),
 
                   const SizedBox(height: 24),

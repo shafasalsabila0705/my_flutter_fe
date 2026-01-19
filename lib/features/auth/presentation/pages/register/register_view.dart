@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart'
     as fca;
 import '../../../../../injection_container.dart';
-import 'package:lottie/lottie.dart';
+import '../../../../../core/constants/strings.dart';
+import '../../widgets/auth_header.dart';
+import '../../../../../core/widgets/custom_button.dart';
+import '../../../../../core/widgets/custom_text_field.dart';
 import 'register_controller.dart';
 
 class RegisterView extends fca.View {
@@ -35,11 +38,10 @@ class _RegisterViewState
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Lottie.asset(
-                    'assets/animations/logo_registerlogin.json',
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.contain,
+                  // Auth Header
+                  const AuthHeader(
+                    title: AppStrings.ssoTitle,
+                    subtitle: 'Kota Padang',
                   ),
                   const SizedBox(height: 32),
 
@@ -54,109 +56,57 @@ class _RegisterViewState
                     ),
 
                   // NIP Field
-                  TextField(
+                  CustomTextField(
                     controller: controller.nipController,
-                    decoration: InputDecoration(
-                      labelText: 'Nomor Induk Pegawai',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
+                    label: 'Nomor Induk Pegawai',
                   ),
                   const SizedBox(height: 16),
 
                   // Name Field
-                  TextField(
+                  CustomTextField(
                     controller: controller.nameController,
+                    label: 'Nama Lengkap',
                     textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: 'Nama Lengkap',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Email Field (Optional)
-                  TextField(
+                  // Email Field 
+                  CustomTextField(
                     controller: controller.emailController,
+                    label: 'Email ',
                     keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email (Optional)',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Phone Field (Optional)
-                  TextField(
+                  // Phone Field 
+                  CustomTextField(
                     controller: controller.phoneController,
+                    label: 'No. HP ',
                     keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: 'No. HP (Optional)',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 16),
 
                   // Password Field
-                  TextField(
+                  CustomTextField(
                     controller: controller.passwordController,
-                    decoration: InputDecoration(
-                      labelText: 'Kata Sandi',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                    ),
+                    label: 'Kata Sandi',
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Confirm Password Field
+                  CustomTextField(
+                    controller: controller.confirmPasswordController,
+                    label: 'Konfirmasi Kata Sandi',
                     obscureText: true,
                   ),
                   const SizedBox(height: 32),
 
                   // Register Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: controller.isLoading
-                          ? null
-                          : controller.register,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30.0),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: controller.isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('Daftar'),
-                    ),
+                  CustomButton(
+                    text: 'Daftar',
+                    onPressed: controller.register,
+                    isLoading: controller.isLoading,
                   ),
 
                   const SizedBox(height: 24),

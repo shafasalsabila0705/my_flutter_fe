@@ -14,6 +14,8 @@ class RegisterController extends Controller {
   final TextEditingController nipController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
   final TextEditingController emailController =
       TextEditingController(); // Start with minimal, but Entity supports these
   final TextEditingController phoneController = TextEditingController();
@@ -53,12 +55,17 @@ class RegisterController extends Controller {
     final passwordError = InputValidator.validatePassword(
       passwordController.text,
     );
+    final confirmPasswordError =
+        passwordController.text != confirmPasswordController.text
+        ? 'Konfirmasi password tidak cocok'
+        : null;
     final nameError = InputValidator.validateName(nameController.text);
     final emailError = InputValidator.validateEmail(emailController.text);
     final phoneError = InputValidator.validatePhone(phoneController.text);
 
     if (nipError == null &&
         passwordError == null &&
+        confirmPasswordError == null &&
         nameError == null &&
         emailError == null &&
         phoneError == null) {
@@ -75,7 +82,12 @@ class RegisterController extends Controller {
       );
     } else {
       errorMessage =
-          nipError ?? passwordError ?? nameError ?? emailError ?? phoneError;
+          nipError ??
+          passwordError ??
+          confirmPasswordError ??
+          nameError ??
+          emailError ??
+          phoneError;
       refreshUI();
     }
   }
@@ -89,6 +101,7 @@ class RegisterController extends Controller {
     nipController.dispose();
     nameController.dispose();
     passwordController.dispose();
+    confirmPasswordController.dispose();
     emailController.dispose();
     phoneController.dispose();
     _presenter.dispose();

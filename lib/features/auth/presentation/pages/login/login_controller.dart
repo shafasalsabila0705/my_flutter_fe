@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
 import '../../../../../core/constants/strings.dart';
+
 import '../../../../../core/utils/input_validator.dart';
 import '../../../../../core/providers/user_provider.dart';
-import '../../../../../injection_container.dart'; // To access sl<UserProvider>
+
 import '../../../domain/entities/user.dart';
 import 'login_presenter.dart';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class LoginController extends Controller {
   final LoginPresenter _presenter;
@@ -28,8 +31,16 @@ class LoginController extends Controller {
       isLoading = false;
       currentUser = user;
 
-      // Update Global State
-      sl<UserProvider>().setUser(user);
+      // Update Global State (Riverpod)
+      try {
+        ProviderScope.containerOf(
+          getContext(),
+          listen: false,
+        ).read(userProvider.notifier).setUser(user);
+      } catch (e) {
+        // Fallback or log if context or provider scope is missing (unlikely)
+        print('Riverpod Error: $e');
+      }
 
       errorMessage = null;
       refreshUI();

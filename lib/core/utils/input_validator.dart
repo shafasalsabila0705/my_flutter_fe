@@ -3,8 +3,12 @@ class InputValidator {
     if (value == null || value.isEmpty) {
       return 'NIP tidak boleh kosong';
     }
+    if (value.length < 18) {
+      return 'NIP harus minimal 18 karakter';
+    }
     return null;
   }
+
 
   static String? validatePassword(String? value) {
     if (value == null || value.isEmpty) {

@@ -4,10 +4,12 @@ import 'features/auth/presentation/pages/register/register_view.dart';
 import 'features/dashboard/presentation/pages/dashboard/dashboard_view.dart';
 import 'injection_container.dart' as di;
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await di.init();
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

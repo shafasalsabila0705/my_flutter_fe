@@ -1,24 +1,34 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/domain/entities/user.dart';
 
-class UserProvider extends ChangeNotifier {
-  User? _currentUser;
-  String? _token;
+class UserState {
+  final User? currentUser;
+  final bool isLoading;
 
-  User? get currentUser => _currentUser;
-  String? get token => _token;
+  const UserState({this.currentUser, this.isLoading = false});
 
-  bool get isLoggedIn => _currentUser != null;
+  UserState copyWith({User? currentUser, bool? isLoading}) {
+    return UserState(
+      currentUser: currentUser ?? this.currentUser,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
 
-  void setUser(User user, {String? token}) {
-    _currentUser = user;
-    if (token != null) _token = token;
-    notifyListeners();
+class UserNotifier extends StateNotifier<UserState> {
+  UserNotifier() : super(const UserState());
+
+  void setUser(User user) {
+    state = state.copyWith(currentUser: user);
   }
 
   void clearUser() {
-    _currentUser = null;
-    _token = null;
-    notifyListeners();
+    state = const UserState();
   }
+
+  bool get isLoggedIn => state.currentUser != null;
 }
+
+final userProvider = StateNotifierProvider<UserNotifier, UserState>((ref) {
+  return UserNotifier();
+});

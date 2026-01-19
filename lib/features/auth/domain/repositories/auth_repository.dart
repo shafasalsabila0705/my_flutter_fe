@@ -16,4 +16,15 @@ abstract class AuthRepository {
     String? email,
     String? phone,
   });
+
+  /// Logout current user
+  Future<void> logout();
+
+  /// Get currently authenticated user
+  ///
+  /// Returns null if no user is logged in
+  Future<User?> getCurrentUser();
+
+  /// Check if user is authenticated
+  Future<bool> isAuthenticated();
 }

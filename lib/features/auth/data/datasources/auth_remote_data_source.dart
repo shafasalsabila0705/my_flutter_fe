@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/strings.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/user_model.dart';
+import '../../../../core/utils/device_utils.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> login(String nip, String password);
@@ -15,16 +17,24 @@ abstract class AuthRemoteDataSource {
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
-  final Dio dio;
+  final ApiClient apiClient;
 
-  AuthRemoteDataSourceImpl({required this.dio});
+  AuthRemoteDataSourceImpl({required this.apiClient});
 
   @override
   Future<UserModel> login(String nip, String password) async {
     try {
-      final response = await dio.post(
+      final deviceInfo = await DeviceUtils.getDeviceInfo();
+
+      final response = await apiClient.post(
         '/api/login',
-        data: {'nip': nip, 'password': password},
+        data: {
+          'nip': nip,
+          'password': password,
+          'uuid': deviceInfo['uuid'],
+          'brand': deviceInfo['brand'],
+          'series': deviceInfo['series'],
+        },
       );
 
       if (response.statusCode == 200) {
@@ -36,8 +46,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return UserModel(
           id: token.isNotEmpty ? token : 'generated-id',
           nip: nip,
-          name:
-              'Pegawai (Kota Padang)', // Placeholder since API does not return name yet
+          name: response.data['name'] ?? 'Pegawai',
           email: null,
           phone: null,
         );
@@ -47,7 +56,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on DioException catch (e) {
       // DEBUG LOGGING
       print('LOGIN DIO ERROR: ${e.type} - ${e.message}');
+      print(
+        'LOGIN DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}',
+      );
       print('LOGIN DIO RESPONSE: ${e.response?.data}');
+
+      if (e.response?.statusCode == 401) {
+        throw ServerException('NIP atau Kata Sandi salah.');
+      }
 
       throw ServerException(
         e.response?.data['message'] ?? e.message ?? AppStrings.networkError,
@@ -66,7 +82,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     String? phone,
   }) async {
     try {
-      final response = await dio.post(
+      final deviceInfo = await DeviceUtils.getDeviceInfo();
+
+      final response = await apiClient.post(
         '/api/register',
         data: {
           'nip': nip,
@@ -74,6 +92,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
           'name': name,
           'email': email,
           'phone': phone,
+          'uuid': deviceInfo['uuid'],
+          'brand': deviceInfo['brand'],
+          'series': deviceInfo['series'],
         },
       );
 
@@ -85,6 +106,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on DioException catch (e) {
       // DEBUG LOGGING
       print('DIO ERROR: ${e.type} - ${e.message}');
+      print('DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}');
       print('DIO RESPONSE: ${e.response?.data}');
 
       throw ServerException(
