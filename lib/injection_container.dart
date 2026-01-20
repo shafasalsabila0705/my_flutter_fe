@@ -70,7 +70,7 @@ Future<void> init() async {
   // Server user provided: http://172.23.14.140:3000/
   // Since this IP (.140) is different from your laptop IP (.143),
   // we treat it as an external server. Both Emulator and Device should reach it directly.
-  const String serverBaseUrl = 'http://172.23.14.140:3000';
+  const String serverBaseUrl = 'http://172.23.14.133:3000';
 
   String baseUrl = serverBaseUrl;
 

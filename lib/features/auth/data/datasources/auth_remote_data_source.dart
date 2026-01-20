@@ -56,20 +56,37 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on DioException catch (e) {
       // DEBUG LOGGING
       print('LOGIN DIO ERROR: ${e.type} - ${e.message}');
-      print(
-        'LOGIN DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}',
-      );
-      print('LOGIN DIO RESPONSE: ${e.response?.data}');
 
-      if (e.response?.statusCode == 401) {
-        throw ServerException('NIP atau Kata Sandi salah.');
+      String errorMessage = 'Terjadi kesalahan jaringan.';
+
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          errorMessage = 'Koneksi timeout. Coba lagi.';
+          break;
+        case DioExceptionType.connectionError:
+          errorMessage = 'Tidak ada koneksi internet.';
+          break;
+        case DioExceptionType.badResponse:
+          final statusCode = e.response?.statusCode;
+          if (statusCode == 401) {
+            errorMessage = 'NIP atau Kata Sandi salah. (401)';
+          } else if (statusCode == 500) {
+            errorMessage = 'Server Error. (500)';
+          } else {
+            errorMessage =
+                'Masalah Server ($statusCode): ${e.response?.statusMessage ?? "Gagal memproses."}';
+          }
+          break;
+        default:
+          errorMessage = 'Kesalahan tidak diketahui (000)';
+          break;
       }
 
-      throw ServerException(
-        e.response?.data['message'] ?? e.message ?? AppStrings.networkError,
-      );
+      throw ServerException(errorMessage);
     } catch (e) {
-      throw ServerException(e.toString());
+      throw ServerException('Terjadi kesalahan: ${e.toString()}');
     }
   }
 

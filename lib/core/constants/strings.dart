@@ -10,7 +10,7 @@ class AppStrings {
   // UI
   static const String loginTitle = 'Login';
   static const String ssoTitle = 'Single Sign On Kota Padang'; 
-  static const String version = 'versi 1.1.4'; 
+  static const String version = 'versi 2.0.0'; 
   static const String nipLabel = 'Nomor Induk Pegawai'; 
   static const String passwordLabel = 'Kata Sandi'; 
   static const String loginButton = 'Login';

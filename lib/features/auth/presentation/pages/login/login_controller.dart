@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
-import '../../../../../core/constants/strings.dart';
 
 import '../../../../../core/utils/input_validator.dart';
 import '../../../../../core/providers/user_provider.dart';
@@ -49,11 +48,19 @@ class LoginController extends Controller {
 
     _presenter.onLoginError = (e) {
       isLoading = false;
-      errorMessage = e.toString();
+      // Clean up error message prefix if present
+      String cleanMessage = e.toString();
+      if (cleanMessage.contains('ServerException:')) {
+        cleanMessage = cleanMessage.replaceAll('ServerException:', '').trim();
+      } else if (cleanMessage.contains('ServerFailure:')) {
+        cleanMessage = cleanMessage.replaceAll('ServerFailure:', '').trim();
+      } else if (cleanMessage.contains('Exception:')) {
+        cleanMessage = cleanMessage.replaceAll('Exception:', '').trim();
+      }
+
+      errorMessage = cleanMessage;
       refreshUI();
-      ScaffoldMessenger.of(getContext()).showSnackBar(
-        SnackBar(content: Text('${AppStrings.loginFailed}$errorMessage')),
-      );
+      // SnackBar removed as per user request (duplicate alert)
     };
   }
 

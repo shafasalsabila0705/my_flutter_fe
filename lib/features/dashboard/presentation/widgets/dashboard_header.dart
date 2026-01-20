@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as dart_math;
-
+import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../features/auth/domain/entities/user.dart';
 
-class DashboardHeader extends StatefulWidget {
+class DashboardHeader extends StatelessWidget {
   final User? user;
   final VoidCallback onLogout;
 
@@ -14,207 +13,110 @@ class DashboardHeader extends StatefulWidget {
   });
 
   @override
-  State<DashboardHeader> createState() => _DashboardHeaderState();
-}
-
-class _DashboardHeaderState extends State<DashboardHeader>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Blue Background Header with Wave
-        Container(
-          height: 180,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF039BE5), Color(0xFF0288D1)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-          ),
-          child: Stack(
-            children: [
-              // Wave Animation
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
-                    bottomRight: Radius.circular(30),
-                  ),
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, child) {
-                      return CustomPaint(
-                        painter: WavePainter(
-                          _controller.value,
-                          color: Colors.white.withOpacity(0.1),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  MediaQuery.of(context).padding.top + 16,
-                  24,
-                  0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Selamat Datang',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(), // Spacer
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // White User Card
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 60, // Moved up
-          left: 24,
-          right: 24,
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        MediaQuery.of(context).padding.top, // Removed + 20 to lift card higher
+        24,
+        20,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Glass Profile Card
+          GlassCard(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ), // More compact vertically
+            borderRadius: 24,
+            opacity: 0.1, // Lighter/Subtle
+            blur: 20, // Stronger blur
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 0.8,
+            ), // Subtle border
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // User Details (Left)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        widget.user?.name ?? 'Magfira',
+                        user?.name ?? 'Magfira Shabrina',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
-                        widget.user?.nip ?? '090909090909090909',
+                        user?.nip ?? '090909090909090909',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
                           fontWeight: FontWeight.w400,
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'E-Government',
                         style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[500],
-                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.person, size: 36, color: Colors.grey[700]),
+
+                const SizedBox(width: 16),
+
+                // Profile Avatar & Dropdown (Right)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        size: 28,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: Colors.white70,
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
-  }
-}
-
-class WavePainter extends CustomPainter {
-  final double value;
-  final Color color;
-
-  WavePainter(this.value, {required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path();
-
-    final y = size.height * 0.8;
-    path.moveTo(0, y);
-
-    for (double i = 0; i <= size.width; i++) {
-      path.lineTo(
-        i,
-        y +
-            10 *
-                dart_math.sin(
-                  (i / size.width * 2 * dart_math.pi) +
-                      (value * 2 * dart_math.pi),
-                ),
-      );
-    }
-
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant WavePainter oldDelegate) {
-    return true;
   }
 }

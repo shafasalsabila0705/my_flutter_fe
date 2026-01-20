@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import '../../../../core/utils/date_utils.dart' as du;
 
 class ActionStatusCard extends StatefulWidget {
   const ActionStatusCard({super.key});
@@ -12,17 +11,11 @@ class ActionStatusCard extends StatefulWidget {
 
 class _ActionStatusCardState extends State<ActionStatusCard> {
   late Timer _timer;
-  late DateTime _currentTime;
+  DateTime _currentTime = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('id_ID', null);
-    _currentTime = DateTime.now();
-    _startTimer();
-  }
-
-  void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
@@ -42,42 +35,79 @@ class _ActionStatusCardState extends State<ActionStatusCard> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Date
+        // Date (Kamis, 15 Jan 2026) - Smaller
         Text(
-          DateFormat('EEEE, d MMM yyyy', 'id_ID').format(_currentTime),
+          du.DateUtils.formatDate(_currentTime),
           style: const TextStyle(
-            fontSize: 16,
+            fontSize: 14, // Smaller
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: Colors.white70, // Less opacity
+            shadows: [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 4,
+                offset: Offset(0, 1),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
 
-        // Big Time
-        Text(
-          DateFormat('HH.mm').format(_currentTime),
-          style: const TextStyle(
-            fontSize: 72, // Even bigger
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-            height: 1,
-            letterSpacing: -2, // Tighten spacing
+        // Huge Realtime Clock (Fitted)
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            du.DateUtils.formatTime(_currentTime),
+            style: const TextStyle(
+              fontSize: 64, // Reduced from 80
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              height: 1.0,
+              letterSpacing: -2,
+              shadows: [
+                Shadow(
+                  color: Colors.black45, // Stronger shadow
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 8),
 
-        // Location
+        const SizedBox(height: 4),
+
+        // Location Info - Compact & White
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.location_on_outlined, color: Colors.black87, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Kantor Walikota',
+          mainAxisSize: MainAxisSize.min, // Compact
+          children: [
+            // Glassy Icon container or just icon? User said "Ikon + teks lebih rapat"
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.location_on_rounded,
+                color: Colors.white,
+                size: 14,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              "Kantor Walikota",
               style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: Colors.black87,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+                shadows: [
+                  Shadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
             ),
           ],
