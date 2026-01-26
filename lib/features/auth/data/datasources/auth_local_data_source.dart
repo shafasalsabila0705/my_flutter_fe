@@ -10,6 +10,8 @@ abstract class AuthLocalDataSource {
   Future<void> cacheToken(String token);
   Future<String?> getToken();
   Future<void> clearToken();
+  Future<void> cacheRefreshToken(String token);
+  Future<String?> getRefreshToken();
 }
 
 class AuthLocalDataSourceImpl implements AuthLocalDataSource {
@@ -19,6 +21,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 
   static const cachedUserKey = 'CACHED_USER';
   static const cachedTokenKey = 'CACHED_TOKEN';
+  static const cachedRefreshTokenKey = 'CACHED_REFRESH_TOKEN';
 
   @override
   Future<void> cacheUser(UserModel user) async {
@@ -57,5 +60,16 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
   @override
   Future<void> clearToken() async {
     await secureStorage.delete(key: cachedTokenKey);
+    await secureStorage.delete(key: cachedRefreshTokenKey);
+  }
+
+  @override
+  Future<void> cacheRefreshToken(String token) async {
+    await secureStorage.write(key: cachedRefreshTokenKey, value: token);
+  }
+
+  @override
+  Future<String?> getRefreshToken() async {
+    return await secureStorage.read(key: cachedRefreshTokenKey);
   }
 }

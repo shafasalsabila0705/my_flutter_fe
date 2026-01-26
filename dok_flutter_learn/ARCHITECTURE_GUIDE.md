@@ -349,8 +349,7 @@ features/auth/                         # CONTOH FITUR
     │       ├── register_presenter.dart
     │       └── register_view.dart
     └── widgets/
-        └── auth_form_widget.dart
-```
+        └── auth_form_widget.dart```
 
 ### Benefits of Feature-First
 

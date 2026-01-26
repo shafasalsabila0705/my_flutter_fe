@@ -20,6 +20,21 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'core/network/api_client.dart';
 import 'features/auth/data/datasources/auth_local_data_source.dart';
 
+import 'features/dashboard/data/datasources/attendance_remote_data_source.dart';
+import 'features/dashboard/data/repositories/attendance_repository_impl.dart';
+import 'features/dashboard/domain/repositories/attendance_repository.dart';
+
+import 'features/dashboard/data/datasources/banner_remote_data_source.dart';
+import 'features/dashboard/data/repositories/banner_repository_impl.dart';
+
+import 'features/dashboard/data/datasources/leave_remote_data_source.dart';
+import 'features/dashboard/data/repositories/leave_repository_impl.dart';
+import 'features/dashboard/domain/repositories/leave_repository.dart';
+
+import 'features/dashboard/data/datasources/koreksi_remote_data_source.dart';
+import 'features/dashboard/data/repositories/koreksi_repository_impl.dart';
+import 'features/dashboard/domain/repositories/koreksi_repository.dart';
+
 final sl = GetIt.instance;
 
 Future<void> init() async {
@@ -28,7 +43,7 @@ Future<void> init() async {
   // Controller
   sl.registerFactory(() => LoginController(sl()));
   sl.registerFactory(() => RegisterController(sl()));
-  sl.registerFactory(() => DashboardController(sl()));
+  sl.registerFactory(() => DashboardController(sl(), sl(), sl()));
 
   // Presenter
   sl.registerFactory(() => LoginPresenter(sl()));
@@ -43,15 +58,28 @@ Future<void> init() async {
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(
       remoteDataSource: sl(),
-      localDataSource: sl(), // Now available
+      localDataSource: sl(),
       loggerRepository: sl(),
     ),
   );
 
   sl.registerLazySingleton<LoggerRepository>(() => LoggerRepositoryImpl());
 
-  // Core - Providers are now Riverpod, so no GetIt registration needed for UserProvider
-  // sl.registerLazySingleton(() => UserProvider()); // REMOVED
+  sl.registerLazySingleton<AttendanceRepository>(
+    () => AttendanceRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  sl.registerLazySingleton<BannerRepository>(
+    () => BannerRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  sl.registerLazySingleton<LeaveRepository>(
+    () => LeaveRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  sl.registerLazySingleton<KoreksiRepository>(
+    () => KoreksiRepositoryImpl(remoteDataSource: sl()),
+  );
 
   // Data sources
   sl.registerLazySingleton<AuthRemoteDataSource>(
@@ -62,28 +90,36 @@ Future<void> init() async {
     () => AuthLocalDataSourceImpl(secureStorage: sl()),
   );
 
+  sl.registerLazySingleton<AttendanceRemoteDataSource>(
+    () => AttendanceRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  sl.registerLazySingleton<BannerRemoteDataSource>(
+    () => BannerRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  sl.registerLazySingleton<LeaveRemoteDataSource>(
+    () => LeaveRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  sl.registerLazySingleton<KoreksiRemoteDataSource>(
+    () => KoreksiRemoteDataSourceImpl(apiClient: sl()),
+  );
+
   // ! External
 
   sl.registerLazySingleton(() => Logger());
 
   // Define Base URLs
-  // Server user provided: http://172.23.14.140:3000/
-  // Since this IP (.140) is different from your laptop IP (.143),
-  // we treat it as an external server. Both Emulator and Device should reach it directly.
-  const String serverBaseUrl = 'http://172.23.14.133:3000';
+  String baseUrl = 'http://172.23.14.88:3000';
 
-  String baseUrl = serverBaseUrl;
-
-  // Check if running on Android Emulator
   try {
     if (Platform.isAndroid) {
       final deviceInfo = DeviceInfoPlugin();
       final androidInfo = await deviceInfo.androidInfo;
       if (!androidInfo.isPhysicalDevice) {
-        // If server is on the SAME laptop as emulator, use 10.0.2.2
-        // But if server is another machine (.140), use the IP directly.
-        // Assuming .140 is external/another machine based on ipconfig difference.
-        baseUrl = serverBaseUrl;
+        // Emulator localhost
+        baseUrl = 'http://10.0.2.2:3000';
       }
     }
   } catch (e) {
@@ -92,7 +128,9 @@ Future<void> init() async {
 
   print('Using Base URL: $baseUrl');
 
-  sl.registerLazySingleton(() => ApiClient(baseUrl: baseUrl));
+  sl.registerLazySingleton(
+    () => ApiClient(baseUrl: baseUrl, authLocalDataSource: sl()),
+  );
 
   // Secure Storage
   sl.registerLazySingleton(() => const FlutterSecureStorage());

@@ -14,6 +14,11 @@ abstract class AuthRemoteDataSource {
     String? email,
     String? phone,
   });
+  Future<UserModel> getProfile();
+  Future<void> updateProfile(Map<String, dynamic> data);
+  Future<void> updateAtasan(String atasanId);
+  Future<List<UserModel>> getAtasanList();
+  Future<void> changePassword(String oldPassword, String newPassword);
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -31,24 +36,32 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         data: {
           'nip': nip,
           'password': password,
-          'uuid': deviceInfo['uuid'],
+          'device_id': deviceInfo['uuid'], // Mapped from uuid to device_id
           'brand': deviceInfo['brand'],
           'series': deviceInfo['series'],
         },
       );
 
       if (response.statusCode == 200) {
-        // Response format: {"message": "Login Berhasil!", "token": "..."}
-        // Since we don't get user details, we create a temporary UserModel.
-        // In a real app, we would use the token to fetch the user profile.
+        // Response format: {"message": "Login Berhasil", "token": "...", "refresh_token": "...", "data": {...}}
         final token = response.data['token'] as String? ?? '';
+        final refreshToken = response.data['refresh_token'] as String? ?? '';
+        final userData = response.data['data'] as Map<String, dynamic>? ?? {};
 
         return UserModel(
           id: token.isNotEmpty ? token : 'generated-id',
-          nip: nip,
-          name: response.data['name'] ?? 'Pegawai',
-          email: null,
-          phone: null,
+          nip: userData['nip'] ?? nip,
+          name: userData['nama'] ?? userData['name'] ?? 'Pegawai',
+          email: userData['email'],
+          phone: userData['no_hp'] ?? userData['phone'],
+          jabatan: userData['jabatan'],
+          bidang: userData['bidang'],
+          atasanId: (userData['atasan_id'] ?? userData['atasanId'])?.toString(),
+          atasanNama: (userData['atasan_nama'] ?? userData['atasan_name'])
+              ?.toString(),
+          role: (userData['role'] ?? userData['Role'])?.toString(),
+          token: token,
+          refreshToken: refreshToken,
         );
       } else {
         throw ServerException(response.statusMessage ?? 'Server Error');
@@ -129,6 +142,90 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       throw ServerException(
         e.response?.data['message'] ?? e.message ?? AppStrings.networkError,
       );
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> changePassword(String oldPassword, String newPassword) async {
+    try {
+      final response = await apiClient.put(
+        '/api/asn/password',
+        data: {'old_password': oldPassword, 'new_password': newPassword},
+      );
+
+      if (response.statusCode != 200) {
+        String msg = 'Gagal mengubah sandi';
+        if (response.data is Map) {
+          msg = response.data['message'] ?? msg;
+        } else if (response.data is String) {
+          msg = response.data;
+        }
+        throw ServerException(msg);
+      }
+    } on DioException catch (e) {
+      String msg = 'Gagal mengubah sandi';
+      if (e.response?.data != null) {
+        if (e.response!.data is Map) {
+          msg = e.response!.data['message'] ?? e.response!.data['error'] ?? msg;
+        } else if (e.response!.data is String) {
+          msg = e.response!.data;
+        }
+      }
+      throw ServerException(msg);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<UserModel> getProfile() async {
+    try {
+      final response = await apiClient.get('/api/asn/profile');
+      if (response.statusCode == 200) {
+        // Assuming response data is directly the user object or wrapped in 'data'
+        final data = response.data['data'] ?? response.data;
+        return UserModel.fromJson(data);
+      } else {
+        throw ServerException('Gagal mengambil profil');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    try {
+      await apiClient.put('/api/asn/profile', data: data);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateAtasan(String atasanId) async {
+    try {
+      await apiClient.post(
+        '/api/asn/atasan',
+        data: {'atasan_id': int.tryParse(atasanId) ?? atasanId},
+      );
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<List<UserModel>> getAtasanList() async {
+    try {
+      final response = await apiClient.get('/api/asn/atasan-list');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data['data'] ?? [];
+        return data.map((e) => UserModel.fromJson(e)).toList();
+      } else {
+        throw ServerException('Gagal mengambil daftar atasan');
+      }
     } catch (e) {
       throw ServerException(e.toString());
     }

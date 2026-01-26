@@ -17,6 +17,15 @@ abstract class AuthRepository {
     String? phone,
   });
 
+  /// Fetches the user profile from remote
+  Future<User> getProfile();
+
+  /// Updates the user profile
+  Future<void> updateProfile(Map<String, dynamic> data);
+
+  /// Updates the user's supervisor (Atasan)
+  Future<void> updateAtasan(String atasanId);
+
   /// Logout current user
   Future<void> logout();
 
@@ -27,4 +36,10 @@ abstract class AuthRepository {
 
   /// Check if user is authenticated
   Future<bool> isAuthenticated();
+
+  /// Fetch list of supervisors (Atasan)
+  Future<List<User>> getAtasanList();
+
+  /// Change User Password
+  Future<void> changePassword(String oldPassword, String newPassword);
 }

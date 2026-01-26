@@ -30,6 +30,7 @@ class _DashboardViewState
     return fca.ControlledWidgetBuilder<DashboardController>(
       builder: (context, controller) {
         return Scaffold(
+          key: globalKey,
           extendBodyBehindAppBar: true,
           backgroundColor: Colors.transparent,
           body: Stack(
@@ -61,156 +62,248 @@ class _DashboardViewState
                 ),
               ),
 
-              // 3. Service Menu (Pinned to Bottom, Behind Glass)
-              const Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: ServiceMenu(),
+              // 3. Main Content (Scrolls + Fills)
+              Consumer(
+                builder: (context, ref, child) {
+                  // final userState = ref.watch(userProvider); // Moved to new Consumer
+                  // final user = userState.currentUser; // Moved to new Consumer
+
+                  return SafeArea(
+                    bottom: false,
+                    child: CustomScrollView(
+                      slivers: [
+                        // 1. Banner (Scrollable Content)
+                        SliverToBoxAdapter(
+                          child: Stack(
+                            children: [
+                              // Layer 1: Banner (Pushed down by fixed amount to show below collapsed header)
+                              Column(
+                                children: [
+                                  SizedBox(
+                                    height:
+                                        MediaQuery.of(context).padding.top +
+                                        110,
+                                  ),
+                                  BannerSlider(
+                                    banners: controller.banners,
+                                    isLoading: controller.isLoadingBanners,
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+
+                              // Layer 2: Header (Expands and covers banner)
+                              // Not Positioned: ensures it contributes to Stack size, making it clickable
+                              // DashboardHeader( // Removed from here
+                              //   user: user,
+                              //   onLogout: () => controller.logout(),
+                              // ),
+                            ],
+                          ),
+                        ),
+
+                        // 2. Glass Pane + Service Menu (Fills remaining space or scrolls)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Stack(
+                            children: [
+                              // Layer 1: Service Menu (Visually at the bottom, Lower Z-Index)
+                              const Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: ServiceMenu(),
+                              ),
+
+                              // Layer 2: Glass Pane Scope (Higher Z-Index)
+                              Column(
+                                children: [
+                                  // Glass Pane - Expands to push down
+                                  Expanded(
+                                    child: Transform.translate(
+                                      offset: const Offset(
+                                        0,
+                                        10,
+                                      ), // Overlaps white shape, but higher than original 20
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                          child: BackdropFilter(
+                                            filter: ImageFilter.blur(
+                                              sigmaX: 2.0,
+                                              sigmaY: 2.0,
+                                            ),
+                                            child: Container(
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                color: Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(30),
+                                                border: Border.all(
+                                                  color: Colors.white
+                                                      .withOpacity(0.3),
+                                                  width: 1.5,
+                                                ),
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                  colors: [
+                                                    Colors.white.withOpacity(
+                                                      0.03,
+                                                    ),
+                                                    Colors.black.withOpacity(
+                                                      0.01,
+                                                    ),
+                                                  ],
+                                                  stops: const [0.2, 1.0],
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withOpacity(0.3),
+                                                    blurRadius: 30,
+                                                    offset: const Offset(0, 20),
+                                                    spreadRadius: -5,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Stack(
+                                                children: [
+                                                  Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      const ActionStatusCard(),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      AttendanceActions(
+                                                        onCheckIn:
+                                                            (lat, long) =>
+                                                                controller
+                                                                    .checkIn(
+                                                                      lat,
+                                                                      long,
+                                                                    ),
+                                                        onCheckOut:
+                                                            (lat, long) =>
+                                                                controller
+                                                                    .checkOut(
+                                                                      lat,
+                                                                      long,
+                                                                    ),
+                                                        initialData: controller
+                                                            .todayAttendance,
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 25,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  Positioned(
+                                                    bottom: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    child: Container(
+                                                      height: 4,
+                                                      width: double.infinity,
+                                                      margin:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 32,
+                                                            vertical: 12,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              2,
+                                                            ),
+                                                        gradient: LinearGradient(
+                                                          colors: [
+                                                            Colors.cyanAccent
+                                                                .withOpacity(
+                                                                  0.0,
+                                                                ),
+                                                            Colors.white
+                                                                .withOpacity(
+                                                                  0.8,
+                                                                ),
+                                                            Colors.cyanAccent
+                                                                .withOpacity(
+                                                                  0.0,
+                                                                ),
+                                                          ],
+                                                          stops: const [
+                                                            0.0,
+                                                            0.5,
+                                                            1.0,
+                                                          ],
+                                                        ),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Colors
+                                                                .cyanAccent
+                                                                .withOpacity(
+                                                                  0.6,
+                                                                ),
+                                                            blurRadius: 15,
+                                                            spreadRadius: 1,
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  0,
+                                                                ),
+                                                          ),
+                                                        ], 
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Takes up space so the Column knows where to stop expanding
+                                  // Allows scrolling to work correctly
+                                  Opacity(
+                                    opacity: 0,
+                                    // IgnorePointer ensures touches pass through to the real ServiceMenu below
+                                    child: IgnorePointer(
+                                      child: const ServiceMenu(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
 
-              // 4. Main Content (Draggable/Scrollable or just Overflowing)
+              // 4. Fixed Header Overlay
               Consumer(
                 builder: (context, ref, child) {
                   final userState = ref.watch(userProvider);
                   final user = userState.currentUser;
 
-                  // Use SafeArea to avoid notches
-                  return SafeArea(
-                    bottom:
-                        false, // Allow content to reach bottom (overlap menu)
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment
-                          .spaceBetween, // Distribute top/mid/bottom
-                      children: [
-                        // Header with User Card
-                        DashboardHeader(
-                          user: user,
-                          onLogout: () => controller.logout(),
-                        ),
-
-                        // Banner Slider (Reduced Height 150)
-                        const SizedBox(height: 10),
-                        const BannerSlider(),
-                        const SizedBox(height: 10),
-
-                        // MAIN GLASS PANE (Expanded to fill available space)
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(30),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 2.0,
-                                  sigmaY: 2.0,
-                                ), // Very subtle blur
-                                child: Container(
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(30),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(
-                                        0.3,
-                                      ), // Slightly lighter border too
-                                      width: 1.5,
-                                    ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Colors.white.withOpacity(
-                                          0.03,
-                                        ), // Very transparent
-                                        Colors.black.withOpacity(
-                                          0.01,
-                                        ), // Almost clear
-                                      ],
-                                      stops: const [0.2, 1.0],
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(
-                                          0.3,
-                                        ), // Depth 52
-                                        blurRadius: 30,
-                                        offset: const Offset(0, 20),
-                                        spreadRadius: -5,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      // Content: Clock & Button (Centered)
-                                      Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          // 1. Time & Location
-                                          const ActionStatusCard(),
-                                          // 2. Button & Info
-                                          const AttendanceActions(),
-                                          // Spacer for Glow Bar area
-                                          const SizedBox(height: 20),
-                                        ],
-                                      ),
-
-                                      // 3. Glow Bar (Pinned ABSOLUTELY at bottom)
-                                      Positioned(
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        child: Container(
-                                          height: 4,
-                                          width: double.infinity,
-                                          margin: const EdgeInsets.symmetric(
-                                            horizontal: 32,
-                                            vertical:
-                                                12, // Reduced to move bar lower
-                                          ),
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              2,
-                                            ),
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.cyanAccent.withOpacity(
-                                                  0.0,
-                                                ),
-                                                Colors.white.withOpacity(0.8),
-                                                Colors.cyanAccent.withOpacity(
-                                                  0.0,
-                                                ),
-                                              ],
-                                              stops: const [0.0, 0.5, 1.0],
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.cyanAccent
-                                                    .withOpacity(0.6),
-                                                blurRadius: 15,
-                                                spreadRadius: 1,
-                                                offset: const Offset(0, 0),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Spacing at bottom to ensure GlassPane overlaps ServiceMenu
-                        // This pushes the bottom of GlassPane UP from the absolute screen bottom.
-                        // If ServiceMenu is ~150px tall (ScreenH - 150).
-                        // We want GlassPane to end at (ScreenH - 110).
-                        const SizedBox(height: 140),
-                      ],
+                  return Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: DashboardHeader(
+                      user: user,
+                      onLogout: () => controller.logout(),
                     ),
                   );
                 },

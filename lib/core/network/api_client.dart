@@ -1,12 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
+import 'interceptors/auth_interceptor.dart';
 import 'interceptors/throttle_interceptor.dart';
+import '../../features/auth/data/datasources/auth_local_data_source.dart';
 
 class ApiClient {
   late final Dio _dio;
+  final AuthLocalDataSource authLocalDataSource;
 
   ApiClient({
     required String baseUrl,
+    required this.authLocalDataSource,
     Duration throttleDuration = const Duration(seconds: 2),
   }) {
     _dio = Dio(
@@ -19,8 +23,13 @@ class ApiClient {
 
     // Add interceptors
     _dio.interceptors.addAll([
-      // Throttle interceptor (tambahkan pertama)
+      // Auth Interceptor
+      AuthInterceptor(localDataSource: authLocalDataSource),
+
+      // Throttle interceptor (tambahkan pertama/setelah auth)
       ThrottleInterceptor(throttleDuration: throttleDuration),
+
+      // ... existing interceptors
 
       // Log interceptor (debug)
       PrettyDioLogger(

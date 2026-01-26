@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/banner_model.dart';
+
 class BannerSlider extends StatefulWidget {
-  const BannerSlider({super.key});
+  final List<BannerModel>? banners;
+  final bool isLoading;
+
+  const BannerSlider({super.key, this.banners, this.isLoading = false});
 
   @override
   State<BannerSlider> createState() => _BannerSliderState();
@@ -9,26 +14,55 @@ class BannerSlider extends StatefulWidget {
 
 class _BannerSliderState extends State<BannerSlider> {
   final PageController _pageController = PageController(
-    viewportFraction: 0.7, // Shows center + peeking sides better
-    initialPage: 1000,
+    viewportFraction: 0.7,
+    initialPage: 1000, // Large number for infinite scroll
   );
-  int _currentPage = 1000;
+  int _currentPage = 0;
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isLoading) {
+      return const SizedBox(
+        height: 150,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
+    if (widget.banners == null || widget.banners!.isEmpty) {
+      return Container(
+        height: 150,
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Text(
+            "Tidak ada info terbaru",
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+      );
+    }
+
     return Column(
       children: [
         SizedBox(
-          height: 150, // Increased slightly per user request
+          height: 150,
           child: PageView.builder(
             controller: _pageController,
             padEnds: true,
+            // itemCount: null, // Infinite
             onPageChanged: (index) {
               setState(() {
-                _currentPage = index;
+                _currentPage = index % widget.banners!.length;
               });
             },
             itemBuilder: (context, index) {
+              // Modulo for infinite loop
+              final int realIndex = index % widget.banners!.length;
+              final banner = widget.banners![realIndex];
+
               return AnimatedBuilder(
                 animation: _pageController,
                 builder: (context, child) {
@@ -37,23 +71,24 @@ class _BannerSliderState extends State<BannerSlider> {
                     value = _pageController.page! - index;
                     value = (1 - (value.abs() * 0.3)).clamp(0.0, 1.0);
                   } else {
-                    value = index == _currentPage ? 1.0 : 0.7;
+                    // Approximate logic for initial state or jump
+                    final double dist = (index - _pageController.initialPage)
+                        .toDouble();
+                    if (dist.abs() < 1) {
+                      value = 1.0;
+                    } else {
+                      value = 0.7;
+                    }
                   }
 
-                  // value is 1.0 at center, drops to 0.7 at sides.
-                  // We want distinct states.
                   final double scale = Curves.easeInOut
                       .transform(value)
-                      .clamp(
-                        0.8,
-                        1.0,
-                      ); // 0.8 side, 1.0 center (Balanced difference)
+                      .clamp(0.8, 1.0);
 
-                  // Also apply opacity for depth
                   final double opacity = Curves.easeIn
                       .transform(value)
                       .clamp(0.6, 1.0);
-                  // Define isFocused for logic
+
                   final bool isFocused = value > 0.9;
 
                   return Center(
@@ -62,9 +97,7 @@ class _BannerSliderState extends State<BannerSlider> {
                       child: Transform.scale(
                         scale: scale,
                         child: Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 5.0,
-                          ), // Add spacing
+                          margin: const EdgeInsets.symmetric(horizontal: 5.0),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
@@ -80,15 +113,25 @@ class _BannerSliderState extends State<BannerSlider> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                // Design Requirement: "Banner fokus putih"
-                                Container(
-                                  color: Colors.white,
-                                  child: isFocused
-                                      ? null
-                                      : Container(
-                                          color: Colors.black.withOpacity(0.1),
-                                        ), // Dim sides slightly
+                                // Image
+                                Image.network(
+                                  banner.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (ctx, err, stack) => Container(
+                                    color: Colors.white,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
                                 ),
+                                // Focused Overlay
+                                if (!isFocused)
+                                  Container(
+                                    color: Colors.black.withOpacity(0.1),
+                                  ),
                               ],
                             ),
                           ),
@@ -104,20 +147,18 @@ class _BannerSliderState extends State<BannerSlider> {
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (index) {
+          children: List.generate(widget.banners!.length, (index) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: (_currentPage % 3) == index
-                  ? 24
-                  : 8, // Elongated active dot
+              width: _currentPage == index ? 24 : 8,
               height: 8,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                color: (_currentPage % 3) == index
+                color: _currentPage == index
                     ? Colors.white
                     : Colors.white.withOpacity(0.3),
-                boxShadow: (_currentPage % 3) == index
+                boxShadow: _currentPage == index
                     ? [
                         BoxShadow(
                           color: Colors.white.withOpacity(0.5),

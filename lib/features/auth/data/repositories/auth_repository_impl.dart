@@ -22,8 +22,11 @@ class AuthRepositoryImpl implements AuthRepository {
       final userModel = await remoteDataSource.login(nip, password);
       await localDataSource.cacheUser(userModel);
       await localDataSource.cacheToken(
-        userModel.id,
-      ); // Assuming ID is token or we need explicit token field
+        userModel.token ?? userModel.id,
+      ); // Use token if available, else id as fallback
+      if (userModel.refreshToken != null) {
+        await localDataSource.cacheRefreshToken(userModel.refreshToken!);
+      }
       return userModel.toEntity();
     } catch (e, stackTrace) {
       loggerRepository.error(
@@ -86,5 +89,78 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<bool> isAuthenticated() async {
     final token = await localDataSource.getToken();
     return token != null;
+  }
+
+  @override
+  Future<User> getProfile() async {
+    try {
+      final userModel = await remoteDataSource.getProfile();
+      await localDataSource.cacheUser(userModel); // Cache fresh data
+      return userModel.toEntity();
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Get Profile failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    try {
+      await remoteDataSource.updateProfile(data);
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Update Profile failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateAtasan(String atasanId) async {
+    try {
+      await remoteDataSource.updateAtasan(atasanId);
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Update Atasan failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<User>> getAtasanList() async {
+    try {
+      final userModels = await remoteDataSource.getAtasanList();
+      return userModels.map((e) => e.toEntity()).toList();
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Get Atasan List failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> changePassword(String oldPassword, String newPassword) async {
+    try {
+      await remoteDataSource.changePassword(oldPassword, newPassword);
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Change Password failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
   }
 }
