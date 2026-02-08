@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
+import '../../../../../../injection_container.dart';
+import '../../../domain/repositories/leave_repository.dart';
+import '../../../domain/entities/perizinan.dart';
 import 'cuti_detail_verification_page.dart';
 
 class CutiVerificationPage extends StatefulWidget {
@@ -12,6 +15,19 @@ class CutiVerificationPage extends StatefulWidget {
 class _CutiVerificationPageState extends State<CutiVerificationPage> {
   String _selectedFilter = "Semua";
   final List<String> _filters = ["Semua", "Menunggu", "Diterima", "Ditolak"];
+  late Future<List<Perizinan>> _verificationFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshVerification();
+  }
+
+  void _refreshVerification() {
+    setState(() {
+      _verificationFuture = sl<LeaveRepository>().getSubordinateRequests();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +38,7 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -34,8 +50,8 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.4),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -93,20 +109,23 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.15,
-          blur: 15,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
               children: [
                 Icon(Icons.arrow_back, color: Colors.white),
                 SizedBox(width: 16),
-                Text(
-                  "Verifikasi Cuti",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Text(
+                    "Verifikasi Cuti",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -163,37 +182,87 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
   }
 
   Widget _buildVerificationList() {
-    // Mock Data based on screenshot
-    final List<Map<String, String>> requests = [
-      {
-        "name": "Magfira Shabrina",
-        "id": "090909090909090909",
-        "type": "Cuti Tahunan",
-        "startDate": "20 Januari 2026",
-        "endDate": "22 Januari 2026",
-        "status": "Menunggu",
-      },
-    ];
+    return FutureBuilder<List<Perizinan>>(
+      future: _verificationFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text("Gagal memuat data: ${snapshot.error}"));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text("Tidak ada pengajuan."));
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(24),
-      itemCount: requests.length,
-      itemBuilder: (context, index) {
-        final item = requests[index];
-        return _buildRequestCard(item);
+        // FILTER LOGIC
+        final filteredList = snapshot.data!.where((item) {
+          // 1. Filter by Type
+          final tipe = (item.tipe ?? '').toUpperCase();
+
+          // E-Cuti should ideally show actual leaves
+          // Excluding late/early departures and out of office if handled elsewhere
+          // or including everything that is NOT specifically the others?
+          // Since we have specific pages for Attendance and Out of Office,
+          // this page might act as a general "Permission/Leave" page.
+
+          // Strictly filter only CUTI
+          if (tipe != 'CUTI') {
+            return false;
+          }
+
+          // 2. Filter by Status Tab
+          if (_selectedFilter == "Semua") return true;
+          final status = (item.status ?? "").toUpperCase();
+          if (_selectedFilter == "Menunggu") {
+            return status.contains("MENUNGGU");
+          }
+          if (_selectedFilter == "Diterima") {
+            return status.contains("SETUJU") || status.contains("DITERIMA");
+          }
+          if (_selectedFilter == "Ditolak") {
+            return status.contains("TOLAK");
+          }
+
+          return true;
+        }).toList();
+
+        if (filteredList.isEmpty) {
+          return const Center(child: Text("Tidak ada data sesuai filter."));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: filteredList.length,
+          itemBuilder: (context, index) {
+            final item = filteredList[index];
+            return _buildRequestCard(item);
+          },
+        );
       },
     );
   }
 
-  Widget _buildRequestCard(Map<String, String> item) {
+  Widget _buildRequestCard(Perizinan item) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => CutiDetailVerificationPage(data: item),
+            builder: (context) => CutiDetailVerificationPage(
+              data: {
+                "id": item.id ?? "",
+                "name": item.name ?? "-",
+                "nip": item.nip ?? "-",
+                "type": item.jenisIzin ?? "-",
+                "startDate": item.tanggalMulai ?? "-",
+                "endDate": item.tanggalSelesai ?? "-",
+                "status": item.status ?? "-",
+                "reason": item.keterangan ?? "-",
+                "fileBukti": item.fileBukti ?? "",
+              },
+            ),
           ),
         );
+        _refreshVerification();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -202,7 +271,7 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -223,16 +292,19 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    item['name']!,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black87,
+                  Expanded(
+                    child: Text(
+                      item.name ?? "-",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Text(
-                    item['id']!,
+                    item.nip ?? "-",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -248,13 +320,16 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildDetailRow("Jenis Cuti", item['type']!),
+                  _buildDetailRow("Jenis Cuti", item.jenisIzin ?? "-"),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Tanggal Mulai", item['startDate']!),
+                  _buildDetailRow("Tanggal Mulai", item.tanggalMulai ?? "-"),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Tanggal Selesai", item['endDate']!),
+                  _buildDetailRow(
+                    "Tanggal Selesai",
+                    item.tanggalSelesai ?? "-",
+                  ),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Keterangan", item['status']!),
+                  _buildDetailRow("Status", item.status ?? "-"),
                 ],
               ),
             ),

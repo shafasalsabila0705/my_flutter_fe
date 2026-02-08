@@ -70,7 +70,7 @@ class _RegisterViewState
                   ),
                   const SizedBox(height: 16),
 
-                  // Email Field 
+                  // Email Field
                   CustomTextField(
                     controller: controller.emailController,
                     label: 'Email ',
@@ -78,7 +78,7 @@ class _RegisterViewState
                   ),
                   const SizedBox(height: 16),
 
-                  // Phone Field 
+                  // Phone Field
                   CustomTextField(
                     controller: controller.phoneController,
                     label: 'No. HP ',
@@ -90,7 +90,7 @@ class _RegisterViewState
                   CustomTextField(
                     controller: controller.passwordController,
                     label: 'Kata Sandi',
-                    obscureText: true,
+                    isPassword: true,
                   ),
                   const SizedBox(height: 16),
 
@@ -98,7 +98,7 @@ class _RegisterViewState
                   CustomTextField(
                     controller: controller.confirmPasswordController,
                     label: 'Konfirmasi Kata Sandi',
-                    obscureText: true,
+                    isPassword: true,
                   ),
                   const SizedBox(height: 32),
 

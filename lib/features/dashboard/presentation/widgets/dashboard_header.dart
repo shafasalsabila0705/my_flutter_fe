@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
+import '../../../../../../core/network/api_client.dart';
 
 import '../../../../features/auth/domain/entities/user.dart';
 import '../../../../../../injection_container.dart';
@@ -7,6 +8,9 @@ import '../../../../features/auth/domain/repositories/auth_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../core/providers/user_provider.dart';
 import '../../../../features/auth/presentation/pages/change_password/change_password_page.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:convert'; // For base64Decode
 
 class DashboardHeader extends StatefulWidget {
   final User? user;
@@ -16,7 +20,10 @@ class DashboardHeader extends StatefulWidget {
     super.key,
     required this.user,
     required this.onLogout,
+    this.isPlaceholder = false,
   });
+
+  final bool isPlaceholder;
 
   @override
   State<DashboardHeader> createState() => _DashboardHeaderState();
@@ -31,7 +38,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
   @override
   void initState() {
     super.initState();
-    _fetchSupervisors();
+    if (!widget.isPlaceholder) {
+      _fetchSupervisors();
+    }
   }
 
   Future<void> _fetchSupervisors() async {
@@ -54,13 +63,13 @@ class _DashboardHeaderState extends State<DashboardHeader> {
               _selectedSupervisor = savedAtasan;
             } catch (e) {
               // Saved atasan not found in current list (maybe inactive?)
-              print("Saved supervisor not found in list: $e");
+              debugPrint("Saved supervisor not found in list: $e");
             }
           }
         });
       }
     } catch (e) {
-      print("Error fetching supervisors: $e");
+      debugPrint("Error fetching supervisors: $e");
     } finally {
       if (mounted) {
         setState(() => _isLoadingSupervisors = false);
@@ -69,10 +78,10 @@ class _DashboardHeaderState extends State<DashboardHeader> {
   }
 
   Future<void> _saveProfile() async {
-    print("SAVE BUTTON PRESSED"); // Debugging
-    print(
-      "Selected Supervisor: ${_selectedSupervisor?.id} - ${_selectedSupervisor?.name}",
-    ); // Debugging
+    // debugPrint("SAVE BUTTON PRESSED");
+    // debugPrint(
+    //   "Selected Supervisor: ${_selectedSupervisor?.id} - ${_selectedSupervisor?.name}",
+    // );
 
     if (_selectedSupervisor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,7 +136,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
           final container = ProviderScope.containerOf(context, listen: false);
           container.read(userProvider.notifier).setUser(freshUser);
         } catch (e) {
-          print("Provider update error: $e");
+          debugPrint("Provider update error: $e");
         }
 
         // Show Success Dialog
@@ -156,7 +165,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -195,7 +204,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       fontSize: 14,
                       color: Colors.black54,
                       height: 1.5,
-                      fontFamily: 'Inter', // Try to match app font if possible
+                      fontFamily: 'Inter',
                     ),
                     children: [
                       const TextSpan(
@@ -240,8 +249,198 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     );
   }
 
+  bool _isUploadingPhoto = false;
+
+  String _resolvePhotoUrl(String url) {
+    if (url.startsWith('http') || url.startsWith('https')) return url;
+
+    try {
+      final apiClient = sl<ApiClient>();
+      String baseUrl = apiClient.dio.options.baseUrl;
+
+      // Ensure single slash between base and path
+      if (baseUrl.endsWith('/')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+      }
+      if (!url.startsWith('/')) {
+        url = '/$url';
+      }
+
+      return '$baseUrl$url';
+    } catch (e) {
+      // Fallback if DI fails (unlikely)
+      return url;
+    }
+  }
+
+  Future<void> _pickImage() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Ganti Foto Profil",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildPhotoOption(
+                  icon: Icons.camera_alt_rounded,
+                  label: "Kamera",
+                  onTap: () {
+                    Navigator.pop(context);
+                    _processImage(ImageSource.camera);
+                  },
+                ),
+                _buildPhotoOption(
+                  icon: Icons.photo_library_rounded,
+                  label: "Galeri",
+                  onTap: () {
+                    Navigator.pop(context);
+                    _processImage(ImageSource.gallery);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.blue, size: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _processImage(ImageSource source) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 800, // Optimize size
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        final file = File(image.path);
+        final sizeInBytes = await file.length();
+        final sizeInMb = sizeInBytes / (1024 * 1024);
+
+        if (sizeInMb > 2) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Ukuran foto terlalu besar. Maksimal 2MB.',
+                  style: TextStyle(color: Colors.white),
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+
+        _uploadPhoto(file);
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Gagal mengambil gambar')));
+      }
+    }
+  }
+
+  // Cache buster for profile photo
+  int? _profileUpdateTimestamp;
+
+  Future<void> _uploadPhoto(File photo) async {
+    setState(() => _isUploadingPhoto = true);
+    try {
+      final repository = sl<AuthRepository>();
+      await repository.updateProfilePhoto(photo);
+
+      // Refresh Profile
+      final freshUser = await repository.getProfile();
+
+      if (mounted) {
+        // Update Riverpod
+        final container = ProviderScope.containerOf(context, listen: false);
+        container.read(userProvider.notifier).setUser(freshUser);
+
+        // Update local timestamp to force image refresh
+        setState(() {
+          _profileUpdateTimestamp = DateTime.now().millisecondsSinceEpoch;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto Profil berhasil diperbarui!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal upload: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.isPlaceholder) {
+      // Invisible placeholder ensuring exact same height
+      return IgnorePointer(
+        child: Opacity(opacity: 0.0, child: _buildContent(context)),
+      );
+    }
+    return _buildContent(context);
+  }
+
+  Widget _buildContent(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -264,7 +463,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
               opacity: 0.1,
               blur: 20,
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 0.8,
               ),
               child: Column(
@@ -274,7 +473,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
                   // Expanded Content
                   if (_isExpanded) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 4), // Reduced from 20 to 4
                     _buildExpandedDetails(),
                   ],
                 ],
@@ -283,6 +482,56 @@ class _DashboardHeaderState extends State<DashboardHeader> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProfileImage(String url) {
+    // Check if it's a Base64 Data URI
+    if (url.startsWith('data:image')) {
+      try {
+        final base64String = url.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint("Base64 Image Error: $error");
+            return const Icon(Icons.person, size: 28, color: Colors.white);
+          },
+        );
+      } catch (e) {
+        debugPrint("Error decoding base64 image: $e");
+        return const Icon(Icons.person, size: 28, color: Colors.white);
+      }
+    }
+
+    // Standard Network Image
+    final resolvedUrl =
+        _resolvePhotoUrl(url) +
+        (_profileUpdateTimestamp != null
+            ? '${url.contains('?') ? '&' : '?'}v=$_profileUpdateTimestamp'
+            : '');
+
+    return Image.network(
+      resolvedUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint("IMAGE ERROR: $error");
+        debugPrint("Failed URL: $resolvedUrl");
+        return const Icon(Icons.person, size: 28, color: Colors.white);
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                : null,
+            color: Colors.white,
+            strokeWidth: 2,
+          ),
+        );
+      },
     );
   }
 
@@ -298,7 +547,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                widget.user?.name ?? 'Magfira Shabrina',
+                widget.user?.name ?? 'Nama Pengguna',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -310,28 +559,26 @@ class _DashboardHeaderState extends State<DashboardHeader> {
               ),
               const SizedBox(height: 4),
               Text(
-                widget.user?.nip ?? '090909090909090909',
+                widget.user?.nip ?? '-',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.9),
                   fontWeight: FontWeight.w400,
                   letterSpacing: 0.5,
                 ),
               ),
-              // Show E-Gov only in collapsed mode or it's part of details?
-              // Based on image, it's repeated below, but let's hide it here if expanded for cleaner look?
-              // Or keep it simple. Let's keep it here for now.
-              if (!_isExpanded) ...[
-                const SizedBox(height: 4),
-                Text(
-                  widget.user?.bidang ?? '-',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w500,
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                widget.user?.jabatan ?? 'Jabatan',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.3,
                 ),
-              ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -348,18 +595,61 @@ class _DashboardHeaderState extends State<DashboardHeader> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.5),
-                    width: 1.5,
+              Stack(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: _isUploadingPhoto
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : (widget.user?.photoUrl != null
+                              ? ClipOval(
+                                  child: _buildProfileImage(
+                                    widget.user!.photoUrl!,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person,
+                                  size: 28,
+                                  color: Colors.white,
+                                )),
                   ),
-                ),
-                child: const Icon(Icons.person, size: 28, color: Colors.white),
+                  // Camera Icon Overlay
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1565C0),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          size: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Icon(
@@ -381,15 +671,23 @@ class _DashboardHeaderState extends State<DashboardHeader> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Divider
-        Divider(color: Colors.white.withOpacity(0.2), height: 30),
-
-        // Organization Details
+        Divider(
+          color: Colors.white.withValues(alpha: 0.2),
+          height: 16,
+        ), // Reduced from 30 to 16
+        // Organization Details (Bidang)
         _buildDetailRow(
           Icons.business_rounded,
           widget.user?.bidang ?? 'Bidang Belum Diatur',
         ),
         const SizedBox(height: 12),
-        _buildDetailRow(Icons.location_on_rounded, 'Kantor Walikota'),
+        // Location (Organisasi / Unit Kerja)
+        _buildDetailRow(
+          Icons.location_on_rounded,
+          widget.user?.organization ??
+              widget.user?.unitKerja ??
+              'Kantor Walikota',
+        ),
 
         const SizedBox(height: 24),
 
@@ -397,7 +695,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
         Text(
           "Atasan Langsung",
           style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             fontWeight: FontWeight.w500,
             fontSize: 13,
           ),
@@ -406,9 +704,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
           ),
           child: _isLoadingSupervisors
               ? const Center(
@@ -430,7 +728,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     hint: Text(
                       "Pilih Atasan",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 15,
                       ),
                     ),
@@ -469,7 +767,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    value.name ?? "-",
+                                    value.name,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   if (value.jabatan != null)
@@ -477,7 +775,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                                       value.jabatan!,
                                       style: TextStyle(
                                         fontSize: 10,
-                                        color: Colors.white.withOpacity(0.5),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.5,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -510,7 +810,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                 label: const Text("Ubah Sandi"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
@@ -549,7 +849,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.redAccent.withOpacity(0.3),
+                color: Colors.redAccent.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -583,7 +883,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 16, color: Colors.white),

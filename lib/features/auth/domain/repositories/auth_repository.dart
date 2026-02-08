@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../entities/user.dart';
 
 /// AuthRepository Interface
@@ -42,4 +43,11 @@ abstract class AuthRepository {
 
   /// Change User Password
   Future<void> changePassword(String oldPassword, String newPassword);
+
+  Future<String> requestPasswordReset(String nip);
+  Future<String> verifyOtp(String nip, String otp);
+  Future<String> resetPassword(String nip, String otp, String newPassword);
+
+  /// Update Profile Photo
+  Future<void> updateProfilePhoto(File photo);
 }

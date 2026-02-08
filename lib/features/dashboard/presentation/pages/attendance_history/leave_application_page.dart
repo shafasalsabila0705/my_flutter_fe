@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
+import '../../../../../../core/constants/colors.dart'; // Added Import
 
 import '../../../../../../injection_container.dart';
 import '../../../../auth/domain/repositories/auth_repository.dart';
@@ -55,7 +56,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
               supervisorName = supervisor.name;
             }
           } catch (e) {
-            print("Error resolving supervisor name: $e");
+            debugPrint("Error resolving supervisor name: $e");
           }
         }
 
@@ -64,7 +65,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         });
       }
     } catch (e) {
-      print("Error fetching profile: $e");
+      debugPrint("Error fetching profile: $e");
     }
   }
 
@@ -77,7 +78,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -89,10 +90,10 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF1565C0).withOpacity(0.5), // Soft Blue Top
-                    const Color(
-                      0xFF0D47A1,
-                    ).withOpacity(0.8), // Deep Blue Bottom
+                    Colors.black.withValues(
+                      alpha: 0.3,
+                    ), // Consistent Black Overlay
+                    Colors.black.withValues(alpha: 0.5),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -247,10 +248,12 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                               Container(
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
+                                  gradient: LinearGradient(
                                     colors: [
-                                      Color(0xFF42A5F5),
-                                      Color(0xFF1565C0),
+                                      AppColors.primaryBlue.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                      AppColors.primaryBlue,
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
@@ -258,9 +261,9 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                                   borderRadius: BorderRadius.circular(30),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(
-                                        0xFF1565C0,
-                                      ).withOpacity(0.3),
+                                      color: AppColors.primaryBlue.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 5),
                                     ),
@@ -331,8 +334,8 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.15,
-          blur: 15,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
@@ -381,7 +384,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
         border: Border.all(color: Colors.grey.shade300),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

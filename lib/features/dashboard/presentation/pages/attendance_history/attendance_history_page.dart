@@ -7,10 +7,15 @@ import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/attendance_repository.dart';
 import '../../../../auth/domain/repositories/auth_repository.dart'; // Import AuthRepository
 import '../../../data/models/attendance_model.dart';
+import '../../../domain/entities/perizinan.dart';
 import 'package:intl/intl.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../core/providers/user_provider.dart';
+import '../../../../auth/domain/entities/user.dart'; // Explicit import for User
+import 'leave_history_page.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class AttendanceHistoryPage extends ConsumerStatefulWidget {
   const AttendanceHistoryPage({super.key});
@@ -26,133 +31,77 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   late String _selectedMonth; // View init state
   DateTime _focusedDay = DateTime.now();
 
-  void _showLateReasonModal(BuildContext context) {
+  bool _isCorrectionAllowed(String? dateStr) {
+    if (dateStr == null) return false;
+    DateTime targetDate = DateTime.parse(dateStr);
+    DateTime now = DateTime.now();
+
+    // Same month: Always allowed
+    if (targetDate.year == now.year && targetDate.month == now.month) {
+      return true;
+    }
+
+    // Previous month: Check deadline (5th working day of current month)
+    int monthDiff =
+        (now.year - targetDate.year) * 12 + now.month - targetDate.month;
+    if (monthDiff == 1) {
+      // Calculate 5th working day of this month
+      int workingDays = 0;
+      int day = 1;
+      while (workingDays < 5) {
+        DateTime d = DateTime(now.year, now.month, day);
+        if (d.weekday >= DateTime.monday && d.weekday <= DateTime.friday) {
+          workingDays++;
+        }
+        if (workingDays < 5) day++;
+      }
+      DateTime deadline = DateTime(now.year, now.month, day, 23, 59, 59);
+      return now.isBefore(deadline);
+    }
+
+    return false;
+  }
+
+  Future<Map<String, dynamic>> _fetchUserAndSupervisorName() async {
+    final user = await sl<AuthRepository>().getCurrentUser();
+    String supervisorName = user?.atasanNama ?? user?.atasanId ?? "-";
+
+    if (user != null) {
+      // Check if name is actually an ID or null, same logic as LeaveApplicationPage
+      bool nameIsId = supervisorName == user.atasanId;
+      bool nameIsDigit = int.tryParse(supervisorName) != null;
+
+      if (nameIsId ||
+          nameIsDigit ||
+          supervisorName.isEmpty ||
+          supervisorName == "-") {
+        try {
+          // Fetch remote list to find name
+          final supervisors = await sl<AuthRepository>().getAtasanList();
+          final supervisor = supervisors.firstWhere(
+            (s) => s.id.toString() == user.atasanId.toString(),
+            orElse: () => const User(id: '', nip: '', name: '-'),
+          );
+          if (supervisor.name != '-') {
+            supervisorName = supervisor.name;
+          }
+        } catch (e) {
+          debugPrint("Error resolving supervisor name: $e");
+        }
+      }
+    }
+    return {'user': user, 'supervisorName': supervisorName};
+  }
+
+  void _showLateReasonModal(BuildContext context, String date) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return FutureBuilder(
-          future: sl<AuthRepository>().getCurrentUser(), // Fetch profile
-          builder: (context, snapshot) {
-            final user = snapshot.data;
-            final atasanNama =
-                user?.atasanNama ?? user?.atasanId ?? "-"; // Fallback
-
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              padding: EdgeInsets.fromLTRB(
-                24,
-                24,
-                24,
-                MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Atasan",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: TextEditingController(text: atasanNama),
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Alasan",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    maxLines: 2,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.file_upload_outlined, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text(
-                          "Lampirkan Bukti",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0288D1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        "Simpan",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+        return CorrectionFormModal(
+          fetchUserAndSupervisor: _fetchUserAndSupervisorName,
+          date: date,
         );
       },
     );
@@ -175,7 +124,33 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
   // Data Lists
   List<AttendanceModel> _historyList = [];
+  List<Perizinan> _correctionList = [];
   bool _isLoading = true;
+
+  bool _isCorrectionAlreadySubmitted(String? dateStr) {
+    if (dateStr == null) return false;
+    // Check if there is any correction for this date that is pending or approved
+    // Statuses: MENUNGGU VERIFIKASI, DISETUJUI, DITOLAK
+    return _correctionList.any((item) {
+      // Check for 'KOREKSI' type
+      // PerizinanModel sets tipe = 'KOREKSI' in fromCorrectionJson
+      if (item.tipe != 'KOREKSI') return false;
+
+      // Parse date
+      String? itemDate = item.tanggalMulai;
+
+      if (itemDate == null || itemDate != dateStr) return false;
+
+      // Check status
+      // Broaden check: If it contains 'MENUNGGU', 'VERIFIKASI', or 'SETUJU', assume it's active.
+      // We only want to allow resubmission if 'DITOLAK' (rejected).
+      String status = (item.status ?? '').toUpperCase();
+      bool isRejected = status.contains('TOLAK');
+
+      // If NOT rejected, it means it's either Pending or Approved -> Block submission
+      return !isRejected;
+    });
+  }
 
   @override
   void initState() {
@@ -186,6 +161,24 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     _selectedMonth = _months[currentMonthIndex];
 
     _fetchHistory();
+    _fetchTeamRecap(); // Initial fetch
+  }
+
+  // Team Recap Future
+  Future<AttendanceRecapModel>? _teamRecapFuture;
+
+  void _fetchTeamRecap() {
+    int monthIndex = _months.indexOf(_selectedMonth) + 1;
+    final monthStr = monthIndex.toString().padLeft(2, '0');
+    final yearStr = DateTime.now().year.toString();
+
+    setState(() {
+      // Revert to using getTeamRecap with the new endpoint
+      _teamRecapFuture = sl<AttendanceRepository>().getTeamRecap(
+        monthStr,
+        yearStr,
+      );
+    });
   }
 
   List<AttendanceModel> _allHistory = []; // Store source of truth
@@ -194,6 +187,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     try {
       final repository = sl<AttendanceRepository>();
       final history = await repository.getHistory();
+      final corrections = await repository.getCorrectionHistory(); // Added
 
       List<AttendanceModel> finalList = List.from(history);
 
@@ -209,11 +203,12 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           }
         }
       } catch (e) {
-        print("Error fetching today status: $e");
+        debugPrint("Error fetching today status: $e");
       }
 
       setState(() {
         _allHistory = finalList; // Save unfiltered list
+        _correctionList = corrections; // Save corrections
         _isLoading = false;
       });
       // Do NOT filter immediately if we want "click Pilih" flow,
@@ -225,6 +220,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Gagal memuat riwayat: $e')));
@@ -252,26 +248,50 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
   // Helper to map color
   Color? _getStatusColor(String status) {
-    switch (status.toUpperCase()) {
-      case 'HADIR':
-      case 'TEPAT WAKTU':
-        return const Color(0xFF66BB6A);
-      case 'TERLAMBAT':
-        return const Color(0xFFD32F2F); // Red as requested
-      case 'IZIN':
-      case 'CUTI':
-      case 'SAKIT':
-        return const Color(0xFFFFD54F);
-      case 'ALPA':
-        return const Color(0xFFD32F2F);
-      default:
-        // Return null for unknown status so calendar doesn't show grey box
-        return null;
+    // Normalize status
+    final s = status.toUpperCase();
+    if (s.contains('TOLAK')) {
+      return const Color(0xFF00BCD4); // Cyan for Rejected
+    } else if (s.contains('HADIR') ||
+        s.contains('TEPAT WAKTU') ||
+        s.contains('BIMTEK') ||
+        s.contains('TUBEL') ||
+        s.contains('DINAS') ||
+        s.contains('LUAR')) {
+      return const Color(0xFF009668); // Green for Present & Approved Permits
+    } else if (s.contains('IZIN')) {
+      return const Color(0xFF00BCD4); // Cyan
+    } else if (s.contains('CUTI')) {
+      return const Color(0xFF9C27B0); // Purple
+    } else if (s.contains('SAKIT')) {
+      return const Color(0xFF00BCD4); // Cyan (grouped with Izin)
+    } else if (s.contains('TERLAMBAT') ||
+        s.contains('PULANG CEPAT') ||
+        s.contains('CP')) {
+      // Added CP explicitly
+      // Check if it's "permitted late" if you have that logic, otherwise Amber
+      return const Color(0xFFFFC107); // Amber/Yellow
+    } else if (s.contains('ALPA') || s.contains('TANPA')) {
+      return const Color(0xFFF44336); // Red
     }
+    // Default / Belum Absen
+    return const Color(0xFF757575);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watch User State here to adjust layout
+    final userState = ref.watch(userProvider);
+    final user = userState.currentUser;
+    final permissions = user?.permissions ?? [];
+    final role = user?.role ?? '';
+
+    // Check permission OR role fallback
+    final bool isAtasan =
+        permissions.contains('view_team_history') ||
+        role.toLowerCase().contains('admin') ||
+        role.toLowerCase().contains('atasan');
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent, // Background handled by Stack
@@ -280,7 +300,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -292,8 +312,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.4),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -309,7 +329,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                 // Body Layer (White Container)
                 // Pushed down to allow overlap
                 Padding(
-                  padding: const EdgeInsets.only(top: 50),
+                  padding: const EdgeInsets.only(top: 40),
                   child: Container(
                     width: double.infinity,
                     decoration: const BoxDecoration(
@@ -322,10 +342,21 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     child: Column(
                       children: [
                         const SizedBox(
-                          height: 60,
+                          height: 55,
                         ), // Space for the floating header overlap
-                        _buildTabs(),
-                        const SizedBox(height: 20),
+                        // Condition Tabs and Spacer
+                        if (isAtasan) ...[
+                          _buildTabs(),
+                          const SizedBox(height: 20),
+                        ] else ...[
+                          // If not Atasan, maybe a smaller spacer if needed, or none?
+                          // The 60px above might be enough or too much.
+                          // Let's reduce the top spacer slightly from 60 to 40?
+                          // But 60 allows clearing the header.
+                          // With no tabs, content starts immediately after header.
+                          // Let's keep 60, but removing 20 helps.
+                        ],
+
                         _buildFilterSection(),
                         const SizedBox(height: 20),
 
@@ -361,6 +392,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     return Column(
       children: [
         _buildSummaryCards(),
+        const SizedBox(height: 16),
+        _buildLegend(), // Add Legend
         const SizedBox(height: 10),
 
         // View Toggle & Title
@@ -394,137 +427,473 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   }
 
   Widget _buildEmployeeHistoryView() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1565C0), Color(0xFF42A5F5)], // Blue Gradient
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            const Text(
-              "REKAP KEHADIRAN TIM",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 30),
+    return FutureBuilder<AttendanceRecapModel>(
+      future: _teamRecapFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(
+            child: Text("Gagal memuat rekap tim: ${snapshot.error}"),
+          );
+        } else if (!snapshot.hasData) {
+          return const Center(child: Text("Tidak ada data rekap tim."));
+        }
 
-            // Chart
-            SizedBox(
-              height: 200,
-              width: 200,
-              child: CustomPaint(
-                painter: DonutChartPainter([
-                  ChartData(color: const Color(0xFF00C853), value: 85), // Hadir
-                  ChartData(color: const Color(0xFFFFAB00), value: 8), // Izin
-                  ChartData(color: const Color(0xFFD32F2F), value: 5), // Sakit
-                  ChartData(color: const Color(0xFF757575), value: 2), // Alpa
-                ]),
-                child: Center(
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "85%",
-                          style: TextStyle(
-                            color: Color(0xFF00C853),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 32,
+        final data = snapshot.data!;
+
+        // --- Client-Side Aggregation Logic ---
+        // If summary is 0 but we have details, calculate manually
+        int present = data.present;
+        int late = data.late;
+        int permission = data.permission;
+        int leave = data.leave;
+        int unknown = data.alpha; // Use actual Alpha value from model
+
+        final details = data.details ?? [];
+        final hasDetails = details.isNotEmpty;
+        final isSummaryEmpty = (present + late + permission + leave) == 0;
+
+        if (isSummaryEmpty && hasDetails) {
+          // debugPrint("Aggregation Required. Details count: ${details.length}");
+          for (var item in details) {
+            if (item is Map) {
+              // Adapt keys based on possible API response
+              final status =
+                  (item['status'] ?? item['status_kehadiran'] ?? 'ALPHA')
+                      .toString()
+                      .toUpperCase();
+
+              if (status.contains('HADIR') || status.contains('TEPAT')) {
+                present++;
+              } else if (status.contains('TERLAMBAT') ||
+                  status.contains('CP')) {
+                late++;
+              } else if (status.contains('IZIN')) {
+                permission++;
+              } else if (status.contains('CUTI')) {
+                leave++;
+              } else {
+                unknown++;
+              }
+            }
+          }
+        } // End of manual aggregation block
+
+        // Calculate Total
+        final total = present + late + permission + leave + unknown;
+        final presentPercentage = total > 0
+            ? ((present / total) * 100).toInt()
+            : 0;
+
+        // Custom Colors Matching Screenshot
+        final hadirColor = const Color(0xFF009668); // Green
+        final tlColor = const Color(0xFFFFC107); // Amber (TL/CP)
+        final izinColor = const Color(0xFF00BCD4); // Cyan (Izin)
+        final cutiColor = const Color(0xFF9C27B0); // Purple (Cuti)
+        final unknownColor = const Color(0xFFF44336); // Red (Masih Kosong)
+        // final defaultColor = const Color(0xFF9E9E9E); // Grey (Belum Absen)
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            children: [
+              // 1. Chart Section (Clean, No Background)
+              const Text(
+                "REKAP KEHADIRAN TIM",
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Chart
+              SizedBox(
+                height: 180, // Slightly smaller
+                width: 180,
+                child: CustomPaint(
+                  painter: DonutChartPainter([
+                    ChartData(
+                      color: hadirColor,
+                      value: present.toDouble(),
+                    ), // Hadir - Green
+                    ChartData(
+                      color: tlColor,
+                      value: late.toDouble(),
+                    ), // Terlambat - Amber
+                    ChartData(
+                      color: izinColor,
+                      value: permission.toDouble(),
+                    ), // Izin - Cyan
+                    ChartData(
+                      color: cutiColor,
+                      value: leave.toDouble(),
+                    ), // Cuti - Purple
+                    // If unknown > 0, we could show it or assume it is handled elsewhere
+                    ChartData(color: unknownColor, value: unknown.toDouble()),
+                  ]),
+                  child: Center(
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        // No bold shadow, just clean
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "$presentPercentage%",
+                            style: const TextStyle(
+                              color: Color(0xFF009668), // Green text
+                              fontWeight: FontWeight.bold,
+                              fontSize: 28,
+                            ),
                           ),
-                        ),
-                        Text(
-                          "Hadir",
-                          style: TextStyle(
-                            color: Colors.black54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                          const Text(
+                            "Hadir",
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+              const SizedBox(height: 30),
 
-            const SizedBox(height: 30),
+              // 2. Statistics Grid (Compact)
+              // Using Wrap or GridView logic manually with Rows
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTeamStatCard(
+                      "Hadir Tepat Waktu",
+                      "$present",
+                      hadirColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTeamStatCard("TL / CP", "$late", tlColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTeamStatCard("Izin", "$permission", izinColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTeamStatCard("Cuti", "$leave", cutiColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTeamStatCard(
+                      "Tanpa Keterangan",
+                      "$unknown", // Placeholder
+                      unknownColor,
+                    ),
+                  ),
+                ],
+              ),
 
-            // Statistics List
-            _buildStatRow("Hadir", "85% (170 hari)", const Color(0xFF00C853)),
-            const SizedBox(height: 10),
-            _buildStatRow("Izin", "8% (16 hari)", const Color(0xFFFFAB00)),
-            const SizedBox(height: 10),
-            _buildStatRow("Sakit", "5% (10 hari)", const Color(0xFFD32F2F)),
-            const SizedBox(height: 10),
-            _buildStatRow("Alpa", "2% (4 hari)", const Color(0xFF757575)),
-          ],
-        ),
+              // 3. Employee List Section
+              if (hasDetails) ...[
+                const SizedBox(height: 24),
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.people_alt_outlined,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      "Daftar Pegawai",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...details.map((item) {
+                  if (item is! Map) return const SizedBox.shrink();
+                  final name =
+                      item['nama'] ??
+                      item['name'] ??
+                      item['user']?['nama'] ??
+                      'Unknown';
+                  // Check if item is a Monthly Summary (has 'stats') or Daily Log
+                  final stats = item['stats'];
+                  String statusText = '';
+                  String rightInfo = '';
+                  Color badgeColor = Colors.grey;
+
+                  if (stats is Map) {
+                    // --- Monthly Summary Logic ---
+                    int totalHadir =
+                        (stats['total_kehadiran'] ??
+                                stats['hadir_tepat_waktu'] ??
+                                0)
+                            as int;
+                    int alpha = (stats['tk'] ?? stats['alfa'] ?? 0) as int;
+                    int izin = (stats['i'] ?? stats['izin'] ?? 0) as int;
+                    int cuti = (stats['c'] ?? stats['cuti'] ?? 0) as int;
+                    // Sum up lateness variations (Old + New)
+                    int telat =
+                        ((stats['tl'] ?? 0) +
+                                (stats['cp'] ?? 0) +
+                                (stats['tl_cp'] ?? 0) + // New Key
+                                (stats['tl_cp_diizinkan'] ?? 0) + // New Key
+                                (stats['t1'] ?? 0) +
+                                (stats['t2'] ?? 0))
+                            as int;
+
+                    List<String> parts = [];
+                    if (totalHadir > 0) parts.add("Hadir: $totalHadir");
+                    if (telat > 0) parts.add("TL: $telat");
+                    if (izin > 0) parts.add("Izin: $izin");
+                    if (cuti > 0) parts.add("Cuti: $cuti");
+                    if (alpha > 0) parts.add("Tanpa Ket: $alpha");
+
+                    if (parts.isEmpty) {
+                      statusText = "Belum Ada Data";
+                      badgeColor = unknownColor;
+                    } else {
+                      statusText = parts.join(" • ");
+                      // Color priority: Present > Permit > Alpha
+                      if (totalHadir > 0) {
+                        badgeColor = hadirColor;
+                      } else if (izin > 0 || cuti > 0) {
+                        badgeColor = izinColor;
+                      } else {
+                        badgeColor = unknownColor;
+                      }
+                    }
+                    rightInfo = item['nip']?.toString() ?? '-';
+                  } else {
+                    // --- Daily Log Logic (Fallback) ---
+                    final status =
+                        (item['status'] ?? item['status_kehadiran'] ?? 'ALPHA')
+                            .toString()
+                            .toUpperCase();
+                    statusText = status;
+                    rightInfo = item['jam_masuk'] ?? item['time'] ?? '-';
+
+                    if (status.contains('HADIR')) {
+                      badgeColor = hadirColor;
+                    } else if (status.contains('TERLAMBAT')) {
+                      badgeColor = tlColor;
+                    } else if (status.contains('IZIN')) {
+                      badgeColor = izinColor;
+                    } else if (status.contains('CUTI')) {
+                      badgeColor = cutiColor;
+                    } else if (status.contains('ALPHA')) {
+                      badgeColor = unknownColor;
+                    }
+                  }
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: badgeColor.withValues(alpha: 0.1),
+                          radius: 18,
+                          child: Icon(
+                            Icons.person,
+                            color: badgeColor,
+                            size: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                statusText,
+                                style: TextStyle(
+                                  color: badgeColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          rightInfo,
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+
+              // Debug Info for User/Dev (Temporary)
+              if (total == 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    color: Colors.grey.shade100,
+                    child: SelectableText(
+                      "Debug Info:\nTotal: $total\nPresent: $present\nDetails Count: ${details.length}\nHas Details: $hasDetails\nRaw Data Sample: ${hasDetails ? details.first.keys.toString() : 'No Details'}",
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTeamStatCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ), // More compact padding
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12), // Slightly smaller radius
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.08), // Very subtle shadow
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.shade100), // Very light border
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Label with small dot
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 11, // Smaller font
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Value
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16, // Prominent value
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatRow(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2), // Glassy effect inside card
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
+  Widget _buildLegend() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
         children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
+          _buildLegendItem("Hadir", const Color(0xFF009668)),
+          _buildLegendItem("TL / CP", const Color(0xFFFFC107)),
+          _buildLegendItem("Izin", const Color(0xFF00BCD4)),
+          _buildLegendItem("Cuti", const Color(0xFF9C27B0)),
+          _buildLegendItem("Tanpa Ket.", const Color(0xFFF44336)),
+          _buildLegendItem("Belum Absen", const Color(0xFF757575)),
         ],
       ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.black54,
+          ),
+        ),
+      ],
     );
   }
 
@@ -536,8 +905,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
             onTap: () => Navigator.pop(context),
             child: GlassCard(
               borderRadius: 30,
-              opacity: 0.15,
-              blur: 15,
+              opacity: 0.3,
+              blur: 30,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -561,17 +930,39 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
+        // Leave Menu Button
         GlassCard(
           borderRadius: 20,
           opacity: 0.3,
+          blur: 30,
           child: IconButton(
             icon: const Icon(Icons.edit_note_rounded, color: Colors.white),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const LeaveMenuPage()),
-              );
+              final user = ref.read(userProvider).currentUser;
+              final permissions = user?.permissions ?? [];
+              final role = user?.role ?? '';
+
+              final isAtasan =
+                  permissions.contains('view_team_history') ||
+                  role.toLowerCase().contains('admin') ||
+                  role.toLowerCase().contains('atasan');
+
+              if (isAtasan) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LeaveMenuPage(),
+                  ),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LeaveHistoryPage(),
+                  ),
+                );
+              }
             },
           ),
         ),
@@ -581,41 +972,25 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
   Widget _buildTabs() {
     // Watch User State
+    // Watch User State
     final userState = ref.watch(userProvider);
     final user = userState.currentUser;
+    final permissions = user?.permissions ?? [];
     final role = user?.role ?? '';
+
     final bool isAtasan =
-        role.isNotEmpty &&
-        (role.toLowerCase().contains('admin') ||
-            role.toLowerCase().contains('atasan'));
+        permissions.contains('view_team_history') ||
+        role.toLowerCase().contains('admin') ||
+        role.toLowerCase().contains('atasan');
 
     if (!isAtasan) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        width: double.infinity,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF006064),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: const Text(
-            "Riwayat Saya",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF006064), // Dark Teal like screenshot
+        color: const Color(0xFF0288D1), // Light Blue like 'Jam Kerja'
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -637,7 +1012,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isSelected
-              ? Border.all(color: const Color(0xFF006064), width: 2)
+              ? Border.all(color: const Color(0xFF0288D1), width: 2)
               : null,
         ),
         margin: const EdgeInsets.all(2),
@@ -645,7 +1020,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           label,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF006064) : Colors.white,
+            color: isSelected ? const Color(0xFF0288D1) : Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -676,7 +1051,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     Icon(
                       Icons.calendar_today_outlined,
                       size: 18,
-                      color: const Color(0xFF1565C0).withOpacity(0.7),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 12),
                     Text(
@@ -688,34 +1063,17 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               );
             }).toList(),
             onChanged: (val) {
-              setState(() => _selectedMonth = val!);
+              setState(() {
+                _selectedMonth = val!;
+                // Sync Calendar
+                int monthIndex = _months.indexOf(val) + 1;
+                _focusedDay = DateTime(DateTime.now().year, monthIndex, 1);
+              });
+              _applyFilter(); // Auto-refresh logic
+              _fetchTeamRecap(); // Refresh team data
             },
             hint: "Pilih Bulan",
             prefixIcon: null, // Icons inside items now
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _applyFilter, // Trigger filter on click
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1565C0), // Dark Blue
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 4,
-                shadowColor: Colors.blue.withOpacity(0.3),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text(
-                "Pilih",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -853,7 +1211,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
             child: _buildCard(
               "Terlambat",
               summary['terlambat'],
-              const Color(0xFFD32F2F),
+              const Color(0xFFFFC107), // Amber for Late
               Icons.assignment_late_outlined,
             ),
           ),
@@ -879,7 +1237,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.4),
+            color: color.withValues(alpha: 0.15),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -959,8 +1317,29 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           ),
           child: InkWell(
             onTap: () {
-              if (item.status == 'TERLAMBAT') {
-                _showLateReasonModal(context);
+              final s = item.status.toUpperCase();
+              if (s.contains('TERLAMBAT') ||
+                  s.contains('PULANG CEPAT') ||
+                  s.contains('CP')) {
+                if (_isCorrectionAlreadySubmitted(item.date)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Izin TL/CP sudah diajukan"),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                } else if (_isCorrectionAllowed(item.date)) {
+                  _showLateReasonModal(context, item.date ?? "");
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Batas pengajuan TL/CP (Minggu pertama bulan berikutnya) sudah berakhir.",
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             borderRadius: BorderRadius.circular(16),
@@ -971,7 +1350,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                   width: 60,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2), // Light bg
+                    color: Colors.grey.withValues(alpha: 0.1), // Light bg
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(15),
                       bottomLeft: Radius.circular(15),
@@ -1012,13 +1391,28 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                           fontSize: 14,
                         ),
                       ),
-                      Text(
-                        item.status,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      // Customized Display Logic
+                      Builder(
+                        builder: (context) {
+                          String displayStatus = item.status;
+                          final s = item.status.toUpperCase();
+                          if ((s.contains('BIMTEK') ||
+                                  s.contains('TUBEL') ||
+                                  s.contains('DINAS') ||
+                                  s.contains('LUAR')) &&
+                              !s.contains('TOLAK') &&
+                              !s.contains('MENUNGGU')) {
+                            displayStatus = "HADIR (${item.status})";
+                          }
+                          return Text(
+                            displayStatus,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -1071,7 +1465,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               onPressed: () {
                 setState(() {
                   _focusedDay = DateTime(year, month - 1, 1);
+                  // Sync Dropdown
+                  _selectedMonth = _months[_focusedDay.month - 1];
                 });
+                _applyFilter();
+                _fetchTeamRecap();
               },
             ),
             Text(
@@ -1083,7 +1481,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               onPressed: () {
                 setState(() {
                   _focusedDay = DateTime(year, month + 1, 1);
+                  // Sync Dropdown
+                  _selectedMonth = _months[_focusedDay.month - 1];
                 });
+                _applyFilter();
+                _fetchTeamRecap();
               },
             ),
           ],
@@ -1158,10 +1560,31 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
               return GestureDetector(
                 onTap: () {
-                  if (isCurrentMonth &&
-                      dailyData != null &&
-                      dailyData.status == 'TERLAMBAT') {
-                    _showLateReasonModal(context);
+                  if (isCurrentMonth && dailyData != null) {
+                    final s = dailyData.status.toUpperCase();
+                    if (s.contains('TERLAMBAT') ||
+                        s.contains('PULANG CEPAT') ||
+                        s.contains('CP')) {
+                      if (_isCorrectionAlreadySubmitted(dailyData.date)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Izin TL/CP sudah diajukan"),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      } else if (_isCorrectionAllowed(dailyData.date)) {
+                        _showLateReasonModal(context, dailyData.date ?? "");
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Batas pengajuan TL/CP (Minggu pertama bulan berikutnya) sudah berakhir.",
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   }
                 },
                 child: Center(
@@ -1237,7 +1660,7 @@ class DonutChartPainter extends CustomPainter {
 
     // Draw background circle
     final bgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.2)
+      ..color = Colors.white.withValues(alpha: 0.2)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
 
@@ -1280,4 +1703,283 @@ class DonutChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class CorrectionFormModal extends StatefulWidget {
+  final Future<Map<String, dynamic>> Function() fetchUserAndSupervisor;
+  final String date;
+
+  const CorrectionFormModal({
+    super.key,
+    required this.fetchUserAndSupervisor,
+    required this.date,
+  });
+
+  @override
+  State<CorrectionFormModal> createState() => _CorrectionFormModalState();
+}
+
+class _CorrectionFormModalState extends State<CorrectionFormModal> {
+  late Future<Map<String, dynamic>> _dataFuture;
+  final TextEditingController _alasanController = TextEditingController();
+  File? _selectedFile;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataFuture = widget.fetchUserAndSupervisor();
+  }
+
+  @override
+  void dispose() {
+    _alasanController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_alasanController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Alasan wajib diisi"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await sl<AttendanceRepository>().submitCorrection(
+        tanggal: widget.date,
+        alasan: _alasanController.text,
+        bukti: _selectedFile,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Pengajuan TL/CP berhasil dikirim"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 200,
+            color: Colors.white,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final data = snapshot.data;
+        final String atasanNama = data?['supervisorName'] ?? '-';
+
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                "Atasan",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: TextEditingController(text: atasanNama),
+                readOnly: true,
+                decoration: InputDecoration(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Alasan",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _alasanController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _pickFile,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _selectedFile != null
+                          ? Colors.green
+                          : Colors.grey.shade300,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    color: _selectedFile != null
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedFile != null
+                            ? Icons.check_circle_outline
+                            : Icons.file_upload_outlined,
+                        color: _selectedFile != null
+                            ? Colors.green
+                            : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedFile != null
+                              ? "Bukti Terlampir: ${_selectedFile!.path.split('/').last}"
+                              : "Lampirkan Bukti (Foto/Dokumen)",
+                          style: TextStyle(
+                            color: _selectedFile != null
+                                ? Colors.green
+                                : Colors.grey,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      if (_selectedFile != null)
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedFile = null;
+                            });
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 8.0),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0288D1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          "Simpan",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

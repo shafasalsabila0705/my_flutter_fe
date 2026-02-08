@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 
 class DeviceUtils {
   static Future<Map<String, String>> getDeviceInfo() async {
@@ -21,7 +22,7 @@ class DeviceUtils {
         };
       }
     } catch (e) {
-      print('Error getting device ID: $e');
+      debugPrint('Error getting device ID: $e');
     }
     return {'uuid': 'unknown_device', 'brand': 'unknown', 'series': 'unknown'};
   }

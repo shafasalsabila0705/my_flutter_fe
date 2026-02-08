@@ -1,4 +1,7 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/strings.dart';
 import '../../../../core/errors/exceptions.dart';
@@ -19,6 +22,11 @@ abstract class AuthRemoteDataSource {
   Future<void> updateAtasan(String atasanId);
   Future<List<UserModel>> getAtasanList();
   Future<void> changePassword(String oldPassword, String newPassword);
+  Future<String> requestPasswordReset(String nip);
+  Future<String> verifyOtp(String nip, String otp);
+
+  Future<String> resetPassword(String nip, String otp, String newPassword);
+  Future<void> updateProfilePhoto(File photo);
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -46,29 +54,23 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         // Response format: {"message": "Login Berhasil", "token": "...", "refresh_token": "...", "data": {...}}
         final token = response.data['token'] as String? ?? '';
         final refreshToken = response.data['refresh_token'] as String? ?? '';
-        final userData = response.data['data'] as Map<String, dynamic>? ?? {};
 
-        return UserModel(
-          id: token.isNotEmpty ? token : 'generated-id',
-          nip: userData['nip'] ?? nip,
-          name: userData['nama'] ?? userData['name'] ?? 'Pegawai',
-          email: userData['email'],
-          phone: userData['no_hp'] ?? userData['phone'],
-          jabatan: userData['jabatan'],
-          bidang: userData['bidang'],
-          atasanId: (userData['atasan_id'] ?? userData['atasanId'])?.toString(),
-          atasanNama: (userData['atasan_nama'] ?? userData['atasan_name'])
-              ?.toString(),
-          role: (userData['role'] ?? userData['Role'])?.toString(),
-          token: token,
-          refreshToken: refreshToken,
+        // Use Map.from to ensure mutable map
+        final Map<String, dynamic> userData = Map<String, dynamic>.from(
+          response.data['data'] as Map? ?? {},
         );
+
+        // Inject tokens into map so fromJson can use them
+        userData['token'] = token;
+        userData['refresh_token'] = refreshToken;
+
+        return UserModel.fromJson(userData);
       } else {
         throw ServerException(response.statusMessage ?? 'Server Error');
       }
     } on DioException catch (e) {
       // DEBUG LOGGING
-      print('LOGIN DIO ERROR: ${e.type} - ${e.message}');
+      debugPrint('LOGIN DIO ERROR: ${e.type} - ${e.message}');
 
       String errorMessage = 'Terjadi kesalahan jaringan.';
 
@@ -135,9 +137,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       }
     } on DioException catch (e) {
       // DEBUG LOGGING
-      print('DIO ERROR: ${e.type} - ${e.message}');
-      print('DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}');
-      print('DIO RESPONSE: ${e.response?.data}');
+      debugPrint('DIO ERROR: ${e.type} - ${e.message}');
+      debugPrint(
+        'DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}',
+      );
+      debugPrint('DIO RESPONSE: ${e.response?.data}');
 
       throw ServerException(
         e.response?.data['message'] ?? e.message ?? AppStrings.networkError,
@@ -226,6 +230,127 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       } else {
         throw ServerException('Gagal mengambil daftar atasan');
       }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<String> requestPasswordReset(String nip) async {
+    try {
+      final response = await apiClient.post(
+        '/api/forgot-password/request',
+        data: {'nip': nip},
+      );
+      if (response.statusCode == 200) {
+        return response.data['message'] ?? 'Kode OTP telah dikirim';
+      } else {
+        throw ServerException(response.statusMessage ?? 'Gagal meminta OTP');
+      }
+    } on DioException catch (e) {
+      String msg = 'Gagal meminta OTP';
+      if (e.response?.data != null && e.response!.data is Map) {
+        msg = e.response!.data['message'] ?? e.response!.data['error'] ?? msg;
+      }
+      throw ServerException(msg);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<String> verifyOtp(String nip, String otp) async {
+    try {
+      final response = await apiClient.post(
+        '/api/forgot-password/verify',
+        data: {'nip': nip, 'otp': otp},
+      );
+      if (response.statusCode == 200) {
+        return response.data['message'] ?? 'OTP Valid';
+      } else {
+        throw ServerException('OTP Tidak Valid');
+      }
+    } on DioException catch (e) {
+      String msg = 'OTP Tidak Valid';
+      if (e.response?.data != null && e.response!.data is Map) {
+        msg = e.response!.data['message'] ?? e.response!.data['error'] ?? msg;
+      }
+      throw ServerException(msg);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<String> resetPassword(
+    String nip,
+    String otp,
+    String newPassword,
+  ) async {
+    try {
+      final response = await apiClient.post(
+        '/api/forgot-password/reset',
+        data: {'nip': nip, 'otp': otp, 'new_password': newPassword},
+      );
+      if (response.statusCode == 200) {
+        return response.data['message'] ?? 'Password berhasil diubah';
+      } else {
+        throw ServerException('Gagal mereset password');
+      }
+    } on DioException catch (e) {
+      String msg = 'Gagal mereset password';
+      if (e.response?.data != null && e.response!.data is Map) {
+        msg = e.response!.data['message'] ?? e.response!.data['error'] ?? msg;
+      }
+      throw ServerException(msg);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateProfilePhoto(File photo) async {
+    try {
+      // API expects Base64 string in JSON body, not Multipart
+      final bytes = await photo.readAsBytes();
+      String base64Image = base64Encode(bytes);
+
+      // Add data URI scheme prefix if needed by backend, usually just base64 string
+      // But standard for web/some APIs is "data:image/jpeg;base64,..."
+      // Based on OpenAPI "Base64 string", let's try raw string first or standard header.
+      // Often simple base64 is enough.
+      // Let's prepend generic header for safety if the backend parses it as invalid image without it?
+      // Re-reading OpenAPI: just says "Base64 string".
+      // Let's try raw base64 first.
+
+      // Wait, usually cleaner to include prefix if it's a web app backend.
+      // "data:image/jpeg;base64," + base64String
+
+      final String extension = photo.path.split('.').last.toLowerCase();
+      String mimeType = 'image/jpeg';
+      if (extension == 'png') mimeType = 'image/png';
+
+      final String fullBase64 = 'data:$mimeType;base64,$base64Image';
+
+      final response = await apiClient.put(
+        '/api/asn/profile',
+        data: {'foto': fullBase64},
+      );
+
+      if (response.statusCode != 200) {
+        throw ServerException(
+          response.statusMessage ?? 'Gagal mengupload foto',
+        );
+      }
+    } on DioException catch (e) {
+      // Debugging
+      debugPrint("UPLOAD ERROR: ${e.response?.data}");
+
+      String msg = 'Gagal mengupload foto';
+      if (e.response?.data != null && e.response!.data is Map) {
+        msg = e.response!.data['message'] ?? e.response!.data['error'] ?? msg;
+      }
+      throw ServerException(msg);
     } catch (e) {
       throw ServerException(e.toString());
     }

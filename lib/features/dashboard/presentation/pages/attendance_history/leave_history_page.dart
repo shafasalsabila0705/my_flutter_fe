@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import 'leave_application_page.dart';
+import '../../../../../../core/constants/colors.dart'; // Added Import
 import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/entities/perizinan.dart';
+import '../../../domain/repositories/attendance_repository.dart'; // Added for Correction History
 
 class LeaveHistoryPage extends StatefulWidget {
   const LeaveHistoryPage({super.key});
@@ -15,17 +17,58 @@ class LeaveHistoryPage extends StatefulWidget {
 class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
   // Use Future to fetch data once or on refresh
   late Future<List<Perizinan>> _historyFuture;
-
   @override
   void initState() {
     super.initState();
-    _refreshHistory();
+    _historyFuture = _fetchHistory();
   }
 
   void _refreshHistory() {
     setState(() {
-      _historyFuture = sl<LeaveRepository>().getLeaveHistory();
+      _historyFuture = _fetchHistory();
     });
+  }
+
+  Future<List<Perizinan>> _fetchHistory() async {
+    try {
+      final futures = await Future.wait([
+        sl<LeaveRepository>().getLeaveHistory(),
+        sl<AttendanceRepository>().getCorrectionHistory(),
+      ]);
+
+      // 1. Leave History (Filter only IZIN)
+      final leaveHistory = futures[0]
+          .where((element) => (element.tipe ?? '').toUpperCase() == 'IZIN')
+          .toList();
+
+      // 2. Correction History (All corrections: TELAT, PULANG_CEPAT, LUAR_RADIUS)
+      final correctionHistory = futures[1];
+
+      // 3. Merge
+      final mergedList = [...leaveHistory, ...correctionHistory];
+
+      // DEBUG: Print first item to check properties
+      if (mergedList.isNotEmpty) {
+        debugPrint("First item ID: ${mergedList.first.id}");
+        debugPrint("First item Tipe: ${mergedList.first.tipe}");
+        debugPrint("First item Status: ${mergedList.first.status}");
+        debugPrint("First item Keterangan: ${mergedList.first.keterangan}");
+      }
+
+      // 4. Sort by Date (Newest first)
+      mergedList.sort((a, b) {
+        final dateA = DateTime.tryParse(a.tanggalMulai ?? '') ?? DateTime(2000);
+        final dateB = DateTime.tryParse(b.tanggalMulai ?? '') ?? DateTime(2000);
+        return dateB.compareTo(dateA);
+      });
+
+      return mergedList;
+    } catch (e) {
+      debugPrint("Error fetching history: $e");
+      // Return empty list or rethrow depending on desired UX
+      // For now, rethrow to show error state
+      rethrow;
+    }
   }
 
   @override
@@ -37,7 +80,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -49,8 +92,8 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.5),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.4),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -77,7 +120,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
                     ),
                     child: Column(
                       children: [
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 20),
                         Expanded(child: _buildHistoryList()),
                       ],
                     ),
@@ -109,7 +152,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
             _refreshHistory();
           }
         },
-        backgroundColor: const Color(0xFF0288D1), // Light Blue
+        backgroundColor: AppColors.primaryBlue, // Standardized Blue
         child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     );
@@ -122,8 +165,8 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.2,
-          blur: 20,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
@@ -157,15 +200,14 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(
             child: Text(
-              "Belum ada riwayat pengajuan.",
+              "Belum ada riwayat pengajuan izin.",
               style: TextStyle(color: Colors.grey),
             ),
           );
         }
 
-        final history = snapshot.data!
-            .where((element) => (element.tipe ?? '').toUpperCase() == 'IZIN')
-            .toList();
+        final history = snapshot.data!;
+
         return ListView.builder(
           padding: const EdgeInsets.all(24),
           itemCount: history.length,
@@ -190,6 +232,15 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
       statusColor = Colors.orange; // Menunggu
     }
 
+    // Determine display title
+    String title = (item.jenisIzin ?? "-").toUpperCase();
+    if ((item.tipe ?? "").toUpperCase() == 'KOREKSI') {
+      title = "TL/CP";
+    }
+
+    // final bool isAtasan =
+    //     _currentUser?.permissions.contains('view_team_history') ?? false;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -197,111 +248,97 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Name & ID)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF5F5F5), // Light Grey Header matching screenshot
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
+          // Header: Standard for all users (My History)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
+                // Title Badge (Left)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20), // Capsule
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                    ),
+                  ),
                   child: Text(
-                    item.name ?? "-",
+                    title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black87,
+                      fontSize: 12,
+                      color: AppColors.primaryBlue,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  item.nip ?? "-",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.black87,
+
+                // Status Badge (Right)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Body (Details)
+          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+
+          // Body: Dates
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildDetailRow(
-                  "Jenis Izin",
-                  (item.jenisIzin ?? "-").toUpperCase(),
+                _buildCompactRow(
+                  Icons.calendar_today_rounded,
+                  "Mulai",
+                  item.tanggalMulai ?? "-",
                 ),
-                const SizedBox(height: 10),
-                _buildDetailRow("Tanggal Mulai", item.tanggalMulai ?? "-"),
-                const SizedBox(height: 10),
-                _buildDetailRow("Tanggal Selesai", item.tanggalSelesai ?? "-"),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 130,
-                      child: Text(
-                        "Status",
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      ": ",
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: statusColor.withOpacity(0.5),
-                          ),
-                        ),
-                        child: Text(
-                          status, // "DITERIMA" e.g.
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                _buildCompactRow(
+                  Icons.event_busy_rounded,
+                  "Selesai",
+                  item.tanggalSelesai ?? "-",
                 ),
+                if (item.keterangan != null && item.keterangan!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildCompactRow(
+                    Icons.note_alt_outlined,
+                    "Alasan",
+                    item.keterangan!,
+                  ),
+                ],
               ],
             ),
           ),
@@ -310,31 +347,29 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildCompactRow(IconData icon, String label, String value) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Icon(icon, size: 18, color: Colors.grey.shade500),
+        const SizedBox(width: 12),
         SizedBox(
-          width: 130,
+          width: 60,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.black87,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
-              fontSize: 14,
             ),
           ),
         ),
-        const Text(
-          ": ",
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
-        ),
+        const Text(": ", style: TextStyle(color: Colors.grey)),
         Expanded(
           child: Text(
             value,
             style: const TextStyle(
               color: Colors.black87,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
           ),

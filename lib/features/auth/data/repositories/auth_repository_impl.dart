@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../../../../core/errors/exceptions.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -157,6 +158,51 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e, stackTrace) {
       loggerRepository.error(
         'Change Password failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> requestPasswordReset(String nip) async {
+    try {
+      return await remoteDataSource.requestPasswordReset(nip);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> verifyOtp(String nip, String otp) async {
+    try {
+      return await remoteDataSource.verifyOtp(nip, otp);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> resetPassword(
+    String nip,
+    String otp,
+    String newPassword,
+  ) async {
+    try {
+      return await remoteDataSource.resetPassword(nip, otp, newPassword);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateProfilePhoto(File photo) async {
+    try {
+      await remoteDataSource.updateProfilePhoto(photo);
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Update Profile Photo failed',
         error: e,
         stackTrace: stackTrace,
       );

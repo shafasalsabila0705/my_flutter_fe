@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'features/auth/presentation/pages/login/login_view.dart';
-import 'features/auth/presentation/pages/register/register_view.dart';
-import 'features/dashboard/presentation/pages/dashboard/dashboard_view.dart';
+import 'features/auth/presentation/pages/login/login_page.dart';
+import 'features/auth/presentation/pages/register/register_page.dart';
+import 'features/dashboard/presentation/pages/dashboard/dashboard_page.dart';
 import 'injection_container.dart' as di;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,10 +23,10 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const LoginView(),
+      home: const LoginPage(),
       routes: {
-        '/register': (context) => const RegisterView(),
-        '/dashboard': (context) => const DashboardView(),
+        '/register': (context) => const RegisterPage(),
+        '/dashboard': (context) => const DashboardPage(),
       },
     );
   }

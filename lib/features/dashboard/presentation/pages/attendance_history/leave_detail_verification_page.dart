@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
+import '../../../../../../core/constants/colors.dart'; // Added Import
 
 class LeaveDetailVerificationPage extends StatelessWidget {
   final Map<String, String> data;
@@ -25,7 +26,7 @@ class LeaveDetailVerificationPage extends StatelessWidget {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -37,8 +38,8 @@ class LeaveDetailVerificationPage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.8),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -100,7 +101,7 @@ class LeaveDetailVerificationPage extends StatelessWidget {
                                 Expanded(
                                   child: _buildActionButton(
                                     text: "Terima",
-                                    color: const Color(0xFF0288D1),
+                                    color: AppColors.primaryBlue,
                                     onPressed: () {
                                       // Handle Approve
                                       Navigator.pop(context);
@@ -150,8 +151,8 @@ class LeaveDetailVerificationPage extends StatelessWidget {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.15,
-          blur: 15,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(

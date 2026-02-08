@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../widgets/auth_header.dart';
-import '../login/login_view.dart';
+import '../login/login_page.dart';
+import '../../../../../core/utils/password_validator.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -75,7 +76,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
 
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const LoginView()),
+            MaterialPageRoute(builder: (context) => const LoginPage()),
             (route) => false,
           );
         }
@@ -131,7 +132,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -159,12 +160,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                           obscureText: _obscureNew,
                           onToggle: () =>
                               setState(() => _obscureNew = !_obscureNew),
-                          validator: (val) {
-                            if (val == null || val.isEmpty)
-                              return "Wajib diisi";
-                            if (val.length < 6) return "Minimal 6 karakter";
-                            return null;
-                          },
+                          validator: (val) => PasswordValidator.validate(val),
                         ),
                         const SizedBox(height: 12),
 
@@ -176,8 +172,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                             () => _obscureConfirm = !_obscureConfirm,
                           ),
                           validator: (val) {
-                            if (val == null || val.isEmpty)
+                            if (val == null || val.isEmpty) {
                               return "Wajib diisi";
+                            }
                             if (val != _newPasswordController.text) {
                               return "Kata sandi tidak sama";
                             }
@@ -197,7 +194,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                             borderRadius: BorderRadius.circular(30),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF1565C0).withOpacity(0.3),
+                                color: const Color(
+                                  0xFF1565C0,
+                                ).withValues(alpha: 0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 5),
                               ),

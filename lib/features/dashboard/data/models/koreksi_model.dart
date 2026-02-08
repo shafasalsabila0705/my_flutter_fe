@@ -13,15 +13,44 @@ class KoreksiModel extends Koreksi {
   });
 
   factory KoreksiModel.fromJson(Map<String, dynamic> json) {
+    // Check for nested user object
+    final user =
+        json['user'] ?? json['pegawai'] ?? json['employee'] ?? json['asn'];
+
+    // Robust ID parsing
+    final parsedId = json['id'] ?? json['ID'] ?? json['koreksi_id'];
+
     return KoreksiModel(
-      id: json['id']?.toString(),
+      id: parsedId?.toString(),
       tanggalKehadiran: json['tanggal_kehadiran']?.toString(),
       tipeKoreksi: json['tipe_koreksi']?.toString(),
       alasan: json['alasan']?.toString(),
       fileBukti: json['file_bukti']?.toString(),
       status: json['status']?.toString(),
-      name: (json['nama'] ?? json['name'])?.toString(),
-      nip: json['nip']?.toString(),
+      name:
+          (user?['nama'] ??
+                  user?['name'] ??
+                  user?['nama_lengkap'] ??
+                  user?['full_name'] ??
+                  json['nama'] ??
+                  json['name'] ??
+                  json['nama_lengkap'] ??
+                  json['full_name'])
+              ?.toString(),
+      nip: (user?['nip'] ?? json['nip'] ?? json['nip_pegawai'])?.toString(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'tanggal_kehadiran': tanggalKehadiran,
+      'tipe_koreksi': tipeKoreksi,
+      'alasan': alasan,
+      'file_bukti': fileBukti,
+      'status': status,
+      'name': name,
+      'nip': nip,
+    };
   }
 }

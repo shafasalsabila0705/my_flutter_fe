@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
+import '../../../../../../core/constants/colors.dart'; // Added Import
 import 'cuti_history_page.dart';
 import 'cuti_verification_page.dart';
 
@@ -16,11 +17,13 @@ class CutiMenuPage extends ConsumerWidget {
     final user = userState.currentUser;
     final role = user?.role ?? '';
 
-    // Check role
+    // Check role based on Atasan/Admin or Permission
+    final permissions = user?.permissions ?? [];
     final bool isAtasan =
-        role.isNotEmpty &&
-        (role.toLowerCase().contains('admin') ||
-            role.toLowerCase().contains('atasan'));
+        permissions.contains('view_team_history') ||
+        (role.isNotEmpty &&
+            (role.toLowerCase().contains('admin') ||
+                role.toLowerCase().contains('atasan')));
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -28,7 +31,7 @@ class CutiMenuPage extends ConsumerWidget {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -40,8 +43,8 @@ class CutiMenuPage extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.4),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -69,10 +72,15 @@ class CutiMenuPage extends ConsumerWidget {
                     child: ListView(
                       padding: const EdgeInsets.all(24),
                       children: [
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 20),
                         _buildMenuItem(
                           title: "Ajukan Cuti",
                           subtitle: "Ajukan permohonan cuti",
+                          icon: Icons.edit_note_rounded,
+                          gradientColors: [
+                            AppColors.primaryBlue.withValues(alpha: 0.8),
+                            AppColors.primaryBlue,
+                          ],
                           onTap: () {
                             Navigator.push(
                               context,
@@ -82,12 +90,17 @@ class CutiMenuPage extends ConsumerWidget {
                             );
                           },
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         // Conditional Verification Menu
                         if (isAtasan)
                           _buildMenuItem(
                             title: "Verifikasi Cuti",
                             subtitle: "Verifikasi permohonan cuti bawahan",
+                            icon: Icons.fact_check_rounded,
+                            gradientColors: [
+                              AppColors.primaryBlue.withValues(alpha: 0.8),
+                              AppColors.primaryBlue,
+                            ],
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -125,8 +138,8 @@ class CutiMenuPage extends ConsumerWidget {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.15,
-          blur: 15,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
@@ -152,17 +165,20 @@ class CutiMenuPage extends ConsumerWidget {
   Widget _buildMenuItem({
     required String title,
     required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
     required VoidCallback onTap,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFA0CBE8), // Light Blue
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+            spreadRadius: 2,
           ),
         ],
       ),
@@ -173,14 +189,29 @@ class CutiMenuPage extends ConsumerWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Icon (Pencil)
-                const Icon(
-                  Icons.edit_outlined,
-                  color: Color(0xFF006064), // Dark Teal Text Color
-                  size: 28,
+                // Gradient Icon Container
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: gradientColors,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradientColors.first.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 24),
                 ),
                 const SizedBox(width: 16),
 
@@ -192,8 +223,8 @@ class CutiMenuPage extends ConsumerWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2d2d2d),
+                          fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
                       ),
@@ -201,9 +232,10 @@ class CutiMenuPage extends ConsumerWidget {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: const Color(0xFFB08C00), // Dark Gold/Orange
-                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w400,
                           fontSize: 12,
+                          height: 1.2,
                         ),
                       ),
                     ],
@@ -211,10 +243,11 @@ class CutiMenuPage extends ConsumerWidget {
                 ),
 
                 // Arrow
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFB08C00),
-                  size: 24,
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.grey.shade300,
+                  size: 16,
                 ),
               ],
             ),

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../../features/auth/data/datasources/auth_local_data_source.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -14,7 +15,6 @@ class AuthInterceptor extends Interceptor {
     // Skip auth for login/register/refresh endpoints to avoid unnecessary storage reads
     if (options.path.contains('/login') ||
         options.path.contains('/register') ||
-        options.path.contains('/koreksi') ||
         options.path.contains('/refresh')) {
       return handler.next(options);
     }
@@ -25,7 +25,7 @@ class AuthInterceptor extends Interceptor {
         options.headers['Authorization'] = 'Bearer $token';
       }
     } catch (e) {
-      print('AuthInterceptor Error: $e');
+      debugPrint('AuthInterceptor Error: $e');
     }
 
     return handler.next(options);
@@ -83,7 +83,7 @@ class AuthInterceptor extends Interceptor {
         }
       } catch (e) {
         // Refresh Failed -> LOGOUT
-        print('Refresh Token Failed: $e');
+        debugPrint('Refresh Token Failed: $e');
         await localDataSource.clearToken();
         // Fall through to handler.next(err)
       }

@@ -42,7 +42,7 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
           // 1. Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -53,8 +53,8 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.8),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -109,8 +109,8 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity: 0.15,
-          blur: 15,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
@@ -118,7 +118,7 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                 Icon(Icons.arrow_back, color: Colors.white),
                 SizedBox(width: 16),
                 Text(
-                  "Verifikasi Izin Bawahan",
+                  "Izin Pegawai ",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -196,7 +196,9 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
           final tipe = (item.tipe ?? '').toUpperCase();
           final jenis = (item.jenisIzin ?? '').toUpperCase();
 
-          if (tipe != 'IZIN') return false;
+          if (tipe != 'IZIN') {
+            return false;
+          }
 
           // 2. Exclude Attendance Statuses (Terlambat, Pulang Cepat, etc.)
           if (jenis.contains('TERLAMBAT') ||
@@ -211,11 +213,15 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
           // 3. Filter by Status Tab
           if (_selectedFilter == "Semua") return true;
           final status = (item.status ?? "").toUpperCase();
-          if (_selectedFilter == "Menunggu")
-            return status.contains("MENUNGGU"); // Or "DIAJUKAN"
-          if (_selectedFilter == "Diterima")
+          if (_selectedFilter == "Menunggu") {
+            return status.contains("MENUNGGU");
+          }
+          if (_selectedFilter == "Diterima") {
             return status.contains("SETUJU") || status.contains("DITERIMA");
-          if (_selectedFilter == "Ditolak") return status.contains("TOLAK");
+          }
+          if (_selectedFilter == "Ditolak") {
+            return status.contains("TOLAK");
+          }
 
           return true;
         }).toList();
@@ -257,8 +263,8 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                 "startDate": item.tanggalMulai ?? "-",
                 "endDate": item.tanggalSelesai ?? "-",
                 "status": item.status ?? "-",
-                "reason":
-                    "-", // reason might not be in Perizinan entity? Check it.
+                "reason": item.keterangan ?? "-",
+                "fileBukti": item.fileBukti ?? "",
               },
             ),
           ),
@@ -272,7 +278,7 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -327,7 +333,12 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                   const SizedBox(height: 8),
                   _buildDetailRow("Tanggal Mulai", item.tanggalMulai ?? "-"),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Status", item.status?.toUpperCase() ?? "-"),
+                  _buildDetailRow(
+                    "Tanggal Selesai",
+                    item.tanggalSelesai ?? "-",
+                  ),
+                  const SizedBox(height: 8),
+                  _buildDetailRow("Keterangan", item.status ?? "-"),
                 ],
               ),
             ),

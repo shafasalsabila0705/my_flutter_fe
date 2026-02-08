@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
+import '../../../../../../core/constants/colors.dart'; // Added Import
 import 'leave_history_page.dart'; // Import History Page
 import 'leave_verification_page.dart';
+import 'attendance_verification_page.dart';
+import 'out_of_office_verification_page.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../core/providers/user_provider.dart';
@@ -16,11 +19,13 @@ class LeaveMenuPage extends ConsumerWidget {
     final user = userState.currentUser;
     final role = user?.role ?? '';
 
-    // Check role based on Atasan/Admin
+    // Check role based on Atasan/Admin or Permission
+    final permissions = user?.permissions ?? [];
     final bool isAtasan =
-        role.isNotEmpty &&
-        (role.toLowerCase().contains('admin') ||
-            role.toLowerCase().contains('atasan'));
+        permissions.contains('view_team_history') ||
+        (role.isNotEmpty &&
+            (role.toLowerCase().contains('admin') ||
+                role.toLowerCase().contains('atasan')));
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -28,7 +33,7 @@ class LeaveMenuPage extends ConsumerWidget {
           // 1. Full Screen Background
           Positioned.fill(
             child: Image.asset(
-              'assets/img/balaikotabaru.png',
+              'assets/img/balai.jpeg',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
                   Container(color: const Color(0xFF1A1A2E)),
@@ -40,8 +45,8 @@ class LeaveMenuPage extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.3), // Lighter overlay
-                    Colors.black.withOpacity(0.5),
+                    Colors.black.withValues(alpha: 0.3), // Lighter overlay
+                    Colors.black.withValues(alpha: 0.5),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -69,15 +74,15 @@ class LeaveMenuPage extends ConsumerWidget {
                     child: ListView(
                       padding: const EdgeInsets.all(24),
                       children: [
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 20),
                         _buildMenuItem(
                           title: "Ajukan Izin",
                           subtitle:
                               "Ajukan izin dinas luar, bimtek, atau tubel",
-                          icon: Icons.edit_document,
+                          icon: Icons.edit_note_rounded,
                           gradientColors: [
-                            const Color(0xFF42A5F5), // Blue 400
-                            const Color(0xFF1565C0), // Blue 800 - Deep Blue
+                            AppColors.primaryBlue.withValues(alpha: 0.8),
+                            AppColors.primaryBlue,
                           ],
                           onTap: () {
                             Navigator.push(
@@ -89,15 +94,15 @@ class LeaveMenuPage extends ConsumerWidget {
                           },
                         ),
                         if (isAtasan) ...[
-                          const SizedBox(height: 12), // Reduced spacing
+                          const SizedBox(height: 12),
                           _buildMenuItem(
                             title: "Verifikasi Izin Bawahan",
                             subtitle:
                                 "Verifikasi izin dinas luar, bimtek atau tubel bawahan",
                             icon: Icons.fact_check_rounded,
                             gradientColors: [
-                              const Color(0xFF42A5F5),
-                              const Color(0xFF1565C0),
+                              AppColors.primaryBlue.withValues(alpha: 0.8),
+                              AppColors.primaryBlue,
                             ],
                             onTap: () {
                               Navigator.push(
@@ -109,27 +114,44 @@ class LeaveMenuPage extends ConsumerWidget {
                               );
                             },
                           ),
-                          const SizedBox(height: 12), // Reduced spacing
+
+                          const SizedBox(height: 12),
                           _buildMenuItem(
                             title: "Verifikasi Telat / Cepat Pulang",
                             subtitle: "Verifikasi telat / cepat pulang bawahan",
                             icon: Icons.access_time_filled_rounded,
                             gradientColors: [
-                              const Color(0xFF42A5F5),
-                              const Color(0xFF1565C0),
+                              AppColors.primaryBlue.withValues(alpha: 0.8),
+                              AppColors.primaryBlue,
                             ],
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const AttendanceVerificationPage(),
+                                ),
+                              );
+                            },
                           ),
-                          const SizedBox(height: 12), // Reduced spacing
+                          const SizedBox(height: 12),
                           _buildMenuItem(
                             title: "Verifikasi Absen Luar Kantor",
                             subtitle: "Verifikasi absen di luar kantor bawahan",
                             icon: Icons.location_on_rounded,
                             gradientColors: [
-                              const Color(0xFF42A5F5),
-                              const Color(0xFF1565C0),
+                              AppColors.primaryBlue.withValues(alpha: 0.8),
+                              AppColors.primaryBlue,
                             ],
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const OutOfOfficeVerificationPage(),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ],
@@ -159,9 +181,8 @@ class LeaveMenuPage extends ConsumerWidget {
         onTap: () => Navigator.pop(context),
         child: GlassCard(
           borderRadius: 30,
-          opacity:
-              0.2, // Increased opacity for "lighter" glass effect against dark bg
-          blur: 20,
+          opacity: 0.3,
+          blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: const Row(
@@ -197,7 +218,7 @@ class LeaveMenuPage extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 15,
             offset: const Offset(0, 5),
             spreadRadius: 2,
@@ -227,7 +248,7 @@ class LeaveMenuPage extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: gradientColors.first.withOpacity(0.3),
+                        color: gradientColors.first.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -247,7 +268,7 @@ class LeaveMenuPage extends ConsumerWidget {
                         style: const TextStyle(
                           color: Color(0xFF2d2d2d),
                           fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                          fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 4),

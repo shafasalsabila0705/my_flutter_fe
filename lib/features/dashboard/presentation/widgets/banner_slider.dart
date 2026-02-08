@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import '../../data/models/banner_model.dart';
 
@@ -18,6 +19,31 @@ class _BannerSliderState extends State<BannerSlider> {
     initialPage: 1000, // Large number for infinite scroll
   );
   int _currentPage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoPlay();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoPlay() {
+    _timer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (_pageController.hasClients) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +59,7 @@ class _BannerSliderState extends State<BannerSlider> {
         height: 150,
         margin: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: const Center(
@@ -102,7 +128,7 @@ class _BannerSliderState extends State<BannerSlider> {
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
+                                color: Colors.black.withValues(alpha: 0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 5),
                               ),
@@ -130,7 +156,7 @@ class _BannerSliderState extends State<BannerSlider> {
                                 // Focused Overlay
                                 if (!isFocused)
                                   Container(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withValues(alpha: 0.1),
                                   ),
                               ],
                             ),
@@ -157,11 +183,11 @@ class _BannerSliderState extends State<BannerSlider> {
                 borderRadius: BorderRadius.circular(4),
                 color: _currentPage == index
                     ? Colors.white
-                    : Colors.white.withOpacity(0.3),
+                    : Colors.white.withValues(alpha: 0.3),
                 boxShadow: _currentPage == index
                     ? [
                         BoxShadow(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha: 0.5),
                           blurRadius: 8,
                         ),
                       ]

@@ -1,9 +1,7 @@
 import '../datasources/banner_remote_data_source.dart';
 import '../models/banner_model.dart';
 
-abstract class BannerRepository {
-  Future<List<BannerModel>> getBanners();
-}
+import '../../domain/repositories/banner_repository.dart';
 
 class BannerRepositoryImpl implements BannerRepository {
   final BannerRemoteDataSource remoteDataSource;

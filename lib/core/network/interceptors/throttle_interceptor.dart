@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 class ThrottleInterceptor extends Interceptor {
   final Duration throttleDuration;
@@ -23,7 +24,7 @@ class ThrottleInterceptor extends Interceptor {
         final waitTime = throttleDuration - elapsed;
 
         // Log throttle warning
-        print(
+        debugPrint(
           'Throttling request to ${options.path}. '
           'Waiting ${waitTime.inMilliseconds}ms',
         );
