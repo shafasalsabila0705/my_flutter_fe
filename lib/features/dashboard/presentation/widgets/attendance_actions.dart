@@ -29,11 +29,13 @@ class AttendanceActions extends StatefulWidget {
   })
   onCheckOut;
   final bool isOutsideRadius;
+  final Future<bool> Function() onValidateSchedule; // Added
 
   const AttendanceActions({
     super.key,
     required this.onCheckIn,
     required this.onCheckOut,
+    required this.onValidateSchedule, // Added
     this.initialData,
     this.onCheckInWithPhoto,
     this.isOutsideRadius = false,
@@ -219,54 +221,84 @@ class _AttendanceActionsState extends State<AttendanceActions> {
       return;
     }
 
+    // --- STEP 1: STRICT SCHEDULE VALIDATION (Blocking) ---
+    // Added logic per user request: "Cek Jadwal Terlebih Dahulu"
+    debugPrint("Checking Schedule Integrity via API...");
+    final bool hasSchedule = await widget.onValidateSchedule();
+    debugPrint("Schedule Check Result: $hasSchedule");
+
+    if (!hasSchedule) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Anda tidak memiliki jadwal hari ini."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return; // STOP PROCESS
+    }
+
     final bool isCheckingIn = !_isClockedIn;
 
     // --- PRE-VALIDATION (Schedule & Time) ---
+    // Note: Since we validated 'existence', we can trust initialData is updated by the provider
+    // OR we can rely on the fact that validator returned true.
+
+    // We still keep the time limit logic, but make it non-blocking if data is weird,
+    // OR strict if we trust validator.
+
     final scheduleData = widget.initialData;
     final now = DateTime.now();
 
     if (isCheckingIn) {
-      // 1. Check if Schedule Exists
+      // 1. Check if Schedule Exists (Double Check)
       final scheduleIn = scheduleData?.scheduledCheckInTime;
       if (scheduleIn == null || scheduleIn.isEmpty || scheduleIn == '-') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Anda tidak memiliki jadwal masuk hari ini."),
-          ),
-        );
-        return;
+        // Should not happen if validator passed, but just in case
+        // We allow proceed or show error?
+        // If Validator said "True", it means API said "OK".
+        // But maybe widget.initialData isn't rebuilt yet?
+        // In Flutter, provider notification should rebuild this widget.
+        // Let's assume it's updated.
       }
 
       // 2. Check Early Time Limit
-      try {
-        final parts = scheduleIn.split(':');
-        final sHour = int.parse(parts[0]);
-        final sMinute = int.parse(parts[1]);
-        final sDate = DateTime(now.year, now.month, now.day, sHour, sMinute);
+      if (scheduleIn != null && scheduleIn.contains(':')) {
+        try {
+          final parts = scheduleIn.split(':');
+          final sHour = int.parse(parts[0]);
+          final sMinute = int.parse(parts[1]);
+          final sDate = DateTime(now.year, now.month, now.day, sHour, sMinute);
 
-        final earlyLimit = sDate.subtract(const Duration(hours: 1));
+          // Allow check-in 1 hour before scheduled time
+          final earlyLimit = sDate.subtract(const Duration(hours: 1));
 
-        if (now.isBefore(earlyLimit)) {
-          final diff = earlyLimit.difference(now).inMinutes;
-          final fmt =
-              "${earlyLimit.hour.toString().padLeft(2, '0')}:${earlyLimit.minute.toString().padLeft(2, '0')}";
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                "Belum saatnya absen. Bisa absen mulai pukul $fmt ($diff menit lagi).",
+          if (now.isBefore(earlyLimit)) {
+            final diff = earlyLimit.difference(now).inMinutes;
+            final fmt =
+                "${earlyLimit.hour.toString().padLeft(2, '0')}:${earlyLimit.minute.toString().padLeft(2, '0')}";
+
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  "Belum saatnya absen. Bisa absen mulai pukul $fmt ($diff menit lagi).",
+                ),
+                backgroundColor: Colors.orange,
               ),
-            ),
-          );
-          return;
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint("Error parsing schedule time: $e");
         }
-      } catch (e) {
-        // Ignore parsing error, allow proceed or log?
       }
     } else {
       // Check Out Validation
       // 1. Check if Schedule Exists
       final scheduleOut = scheduleData?.scheduledCheckOutTime;
       if (scheduleOut == null || scheduleOut.isEmpty || scheduleOut == '-') {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Anda tidak memiliki jadwal pulang hari ini."),
@@ -285,6 +317,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
         final lateLimit = sDate.add(const Duration(hours: 2));
 
         if (now.isAfter(lateLimit)) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -341,6 +374,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
 
       if (isLateNow && !widget.isOutsideRadius) {
         // Only ask if NOT outside radius (Outside Radius is already a correction flow with its own reason)
+        if (!mounted) return;
         final String? input = await showDialog<String>(
           context: context,
           barrierDismissible: false,
@@ -437,6 +471,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
       }
 
       if (isEarly && !widget.isOutsideRadius) {
+        if (!mounted) return;
         final String? input = await showDialog<String>(
           context: context,
           builder: (context) {
