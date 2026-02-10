@@ -197,6 +197,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                                     ),
                                                     const SizedBox(height: 10),
                                                     AttendanceActions(
+                                                      onValidateSchedule: () =>
+                                                          notifier
+                                                              .validateSchedule(),
                                                       onCheckIn:
                                                           (
                                                             lat,
@@ -359,8 +362,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                   ),
                                 ),
                                 // Invisible Service Menu Placeholder to clear space for Positoned ServiceMenu
-                                Opacity(
-                                  opacity: 0,
+                                Visibility(
+                                  visible: false,
+                                  maintainSize: true,
+                                  maintainAnimation: true,
+                                  maintainState: true,
                                   child: IgnorePointer(
                                     child: const ServiceMenu(),
                                   ),

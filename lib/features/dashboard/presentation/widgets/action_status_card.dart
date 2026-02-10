@@ -32,6 +32,30 @@ class _ActionStatusCardState extends State<ActionStatusCard> {
     super.dispose();
   }
 
+  String _formatLocation(String? location) {
+    if (location == null) return "Memuat Lokasi...";
+
+    // 1. Basic usage of abbreviation
+    String formatted = location
+        .replaceAll(RegExp(r'\bJalan\b', caseSensitive: false), 'Jl.')
+        .replaceAll(RegExp(r'\bDokter\b', caseSensitive: false), 'Dr.');
+
+    // 2. Check length (threshold ~35 characters)
+    if (formatted.length > 35) {
+      // If contains comma, try to take the part after the first comma
+      if (location.contains(',')) {
+        final parts = location.split(',');
+        // Strategy: Drop the first part (Street Name)
+        // Heuristic: If we have at least 2 parts, return the rest
+        if (parts.length > 1) {
+          return parts.sublist(1).join(',').trim();
+        }
+      }
+    }
+
+    return formatted;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -97,19 +121,24 @@ class _ActionStatusCardState extends State<ActionStatusCard> {
             ),
             const SizedBox(width: 8),
             const SizedBox(width: 8),
-            Text(
-              widget.locationName ?? "Memuat Lokasi...",
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-                shadows: [
-                  Shadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
+            Flexible(
+              child: Text(
+                _formatLocation(widget.locationName),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

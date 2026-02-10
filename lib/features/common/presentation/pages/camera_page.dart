@@ -14,7 +14,6 @@ class CameraPage extends StatefulWidget {
   @override
   State<CameraPage> createState() => _CameraPageState();
 }
-
 class _CameraPageState extends State<CameraPage> {
   CameraController? _controller;
   List<CameraDescription>? cameras;

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async'; // Added for Completer
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
@@ -135,6 +136,83 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 
   void _getLocation() {
     _getLocationUseCase.execute(_LocationObserver(this));
+  }
+
+  /// Strict Schedule Validation (Hit API directly)
+  Future<bool> validateSchedule() async {
+    try {
+      // We use the existing usecase but await the result via a Completer or similar if needed.
+      // Since clean architecture UseCases use Observers (Stream/Void), we might need a direct Future call
+      // OR we can trust the `state.todayAttendance` IF we force a refresh first?
+      // BUT user wants "Hit API".
+      // The `GetTodayAttendanceUseCase` returns `Stream<AttendanceModel?>`.
+      // We can wrap it or just use the repository directly if we truly need strict "await".
+      // However, to stick to Clean Arch, let's use the Use Case and wait for the state to update?
+      // No, that's async/reactive.
+      // Better approach for "Blocking Check":
+      // We can reuse `_getTodayStatus()` but we need to know WHEN it finishes.
+      // Simpler: Just check `state.todayAttendance`? NO, user said "Hit API".
+
+      // OPTION: Create a specialized UseCase that returns a Future<bool> or
+      // modify GetTodayAttendanceUseCase to allow awaiting?
+      // Or simply:
+
+      // final result = await _getTodayUseCase.repository.getTodayStatus();
+      // Wait, we shouldn't access repo directly from Notifier usually, but we need a synchronous-like waiting.
+      // Let's look at `GetTodayAttendanceUseCase`.
+
+      // Actually, looking at `GetTodayAttendanceUseCase`, it likely calls `repository.getTodayStatus()`.
+      // Let's see if we can expose a "checkSchedule" method.
+
+      // A quick way for now without breaking architecture too much:
+      // We will perform the check inside Notifier by invoking the repository/usecase
+      // but we need to return the result to the UI.
+
+      // Let's implement a fresh fetch here.
+      // Since we don't have direct access to repo here (it's injected into UseCase),
+      // we might need to add a method to `GetTodayAttendanceUseCase` that returns Future.
+      // OR, we can just assume `loadDashboardData` is called often.
+
+      // User said: "Sistem wajib melakukan hit API ke backend Go".
+      // So let's add `Future<bool> hasSchedule()` to `DashboardNotifier`
+      // which calls a new method or repurposes existing one.
+
+      // To keep it clean, let's look at `_getTodayUseCase`.
+      // If it returns a Stream, we can't easily "await" single result unless we listen.
+
+      // Let's cheat slightly for "Blocking UI Action" by using `state` if it was just refreshed?
+      // No, user wants fresh hit.
+
+      // Correct way: Add `Future<AttendanceModel> fetchToday()` to parameters/interfaces?
+      // Or just add `validateTodaySchedule` to `DashboardNotifier` that manually calls the repo?
+      // But repo is not in Notifier. UseCase is.
+
+      // Let's assume we can add a method to the UseCase or just create a new one.
+      // Or... we can use `_getTodayUseCase.execute` and wait for the observer?
+
+      // Let's try to add a helper in Notifier that effectively does the work.
+      // But we can't access repo.
+
+      // OK, I'll add `Future<bool> checkScheduleExistence()` to the UseCase?
+      // No, UseCase standard is `buildUseCaseStream`.
+
+      // Let's look at `AttendanceRemoteDataSource`. It has `getTodayStatus`.
+      // The `AttendanceRepository` calls this.
+      // The `GetTodayAttendanceUseCase` calls repository.
+
+      // I will add a `Future<bool> validateSchedule()` to `DashboardNotifier`.
+      // Since I can't await the UseCase easily without a Completer...
+      // I will implement a "manual" await using a one-off observer/completer.
+
+      final completer = Completer<bool>();
+
+      _getTodayUseCase.execute(_ValidatorObserver(this, completer));
+
+      return completer.future;
+    } catch (e) {
+      debugPrint("Validation Error: $e");
+      return false;
+    }
   }
 
   void checkIn(
@@ -452,6 +530,48 @@ class _BawahanListObserver extends Observer<List<User>> {
   void onError(e) {
     // Silent error or log?
     debugPrint("Failed to load bawahan list: $e");
+  }
+}
+
+class _ValidatorObserver extends Observer<AttendanceModel?> {
+  final DashboardNotifier _notifier;
+  final Completer<bool> _completer;
+
+  _ValidatorObserver(this._notifier, this._completer);
+
+  @override
+  void onNext(AttendanceModel? response) {
+    if (response != null) {
+      // Logic to check if schedule exists
+      final hasSchedule =
+          (response.scheduledCheckInTime != null &&
+          response.scheduledCheckInTime != '-' &&
+          response.scheduledCheckInTime!.isNotEmpty);
+
+      debugPrint(
+        "VALIDATOR: Schedule Code=${response.scheduledCheckInTime}, HasSchedule=$hasSchedule",
+      );
+
+      if (!_completer.isCompleted) {
+        _completer.complete(hasSchedule);
+      }
+
+      // Also update state while we're at it
+      _notifier.onTodayReceived(response);
+    } else {
+      if (!_completer.isCompleted) _completer.complete(false);
+    }
+  }
+
+  @override
+  void onComplete() {}
+
+  @override
+  void onError(e) {
+    debugPrint("VALIDATOR ERROR: $e");
+    if (!_completer.isCompleted) {
+      _completer.complete(false); // Assume no schedule on error
+    }
   }
 }
 
