@@ -200,14 +200,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: const Text('Lupa Password?'),
               ),
               const SizedBox(height: 24),
-
-              // Register Link
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushNamed('/register');
-                },
-                child: const Text('Belum punya akun? Daftar'),
-              ),
             ],
           ),
         ),

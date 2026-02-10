@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/colors.dart';
 
 class CustomDropdown<T> extends StatelessWidget {
   final T? value;
@@ -46,7 +47,7 @@ class CustomDropdown<T> extends StatelessWidget {
           isExpanded: true,
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,
-            color: iconColor ?? const Color(0xFF1565C0), // Blue theme default
+            color: iconColor ?? AppColors.primaryBlue, // Blue theme default
           ),
           dropdownColor: backgroundColor ?? Colors.white,
           borderRadius: BorderRadius.circular(borderRadius),

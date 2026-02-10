@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/colors.dart';
+import '../../../../core/constants/app_icons.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/network/api_client.dart';
 
 import '../../../../features/auth/domain/entities/user.dart';
 import '../../../../../../injection_container.dart';
 import '../../../../features/auth/domain/repositories/auth_repository.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../core/providers/user_provider.dart';
 import '../../../../features/auth/presentation/pages/change_password/change_password_page.dart';
 import 'package:image_picker/image_picker.dart';
@@ -635,15 +638,16 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     child: GestureDetector(
                       onTap: _pickImage,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(2), // Reduced from 4
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1565C0),
+                          color: AppColors.primaryBlue,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
                         child: const Icon(
                           Icons.camera_alt,
-                          size: 10,
+                          size:
+                              10, // Kept size 10 (or could be 9), but padding reduced significantly
                           color: Colors.white,
                         ),
                       ),
@@ -677,13 +681,18 @@ class _DashboardHeaderState extends State<DashboardHeader> {
         ), // Reduced from 30 to 16
         // Organization Details (Bidang)
         _buildDetailRow(
-          Icons.business_rounded,
+          const Icon(Icons.business_rounded, size: 16, color: Colors.white),
           widget.user?.bidang ?? 'Bidang Belum Diatur',
         ),
         const SizedBox(height: 12),
         // Location (Organisasi / Unit Kerja)
         _buildDetailRow(
-          Icons.location_on_rounded,
+          SvgPicture.asset(
+            AppIcons.location,
+            width: 16,
+            height: 16,
+            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          ),
           widget.user?.organization ??
               widget.user?.unitKerja ??
               'Kantor Walikota',
@@ -826,7 +835,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                 label: const Text("Simpan"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF1565C0),
+                  foregroundColor: AppColors.primaryBlue,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
@@ -877,7 +886,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String text) {
+  Widget _buildDetailRow(Widget iconWidget, String text) {
     return Row(
       children: [
         Container(
@@ -886,7 +895,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             color: Colors.white.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, size: 16, color: Colors.white),
+          child: iconWidget,
         ),
         const SizedBox(width: 12),
         Text(

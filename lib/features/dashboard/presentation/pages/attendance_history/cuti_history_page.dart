@@ -296,6 +296,16 @@ class _CutiHistoryPageState extends State<CutiHistoryPage> {
                   "Selesai",
                   item.tanggalSelesai ?? "-",
                 ),
+                if (item.keterangan != null &&
+                    item.keterangan!.isNotEmpty &&
+                    item.keterangan != '-') ...[
+                  const SizedBox(height: 12),
+                  _buildCompactRow(
+                    Icons.note_alt_outlined,
+                    "Alasan",
+                    item.keterangan!,
+                  ),
+                ],
               ],
             ),
           ),

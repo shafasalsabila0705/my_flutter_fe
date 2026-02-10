@@ -4,6 +4,7 @@ import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/entities/perizinan.dart';
 import 'cuti_detail_verification_page.dart';
+import '../../../../../../core/utils/status_helper.dart';
 
 class CutiVerificationPage extends StatefulWidget {
   const CutiVerificationPage({super.key});
@@ -198,28 +199,37 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
           // 1. Filter by Type
           final tipe = (item.tipe ?? '').toUpperCase();
 
+          final jenis = (item.jenisIzin ?? '').toUpperCase();
+
           // E-Cuti should ideally show actual leaves
           // Excluding late/early departures and out of office if handled elsewhere
           // or including everything that is NOT specifically the others?
           // Since we have specific pages for Attendance and Out of Office,
           // this page might act as a general "Permission/Leave" page.
 
-          // Strictly filter only CUTI
-          if (tipe != 'CUTI') {
+          // Strictly filter only CUTI (by Tipe OR Jenis)
+          bool isCuti = tipe == 'CUTI' || jenis.contains('CUTI');
+
+          if (!isCuti) {
             return false;
           }
 
           // 2. Filter by Status Tab
           if (_selectedFilter == "Semua") return true;
-          final status = (item.status ?? "").toUpperCase();
+
+          // Helper maps raw status (English/Indo) to standard Indonesian terms:
+          // MENUNGGU, DISETUJUI, DITOLAK
+          final status = StatusHelper.mapStatusToIndonesian(item.status);
+
           if (_selectedFilter == "Menunggu") {
-            return status.contains("MENUNGGU");
+            return status == "MENUNGGU";
           }
           if (_selectedFilter == "Diterima") {
-            return status.contains("SETUJU") || status.contains("DITERIMA");
+            // Tab is "Diterima", standard status is "DISETUJUI"
+            return status == "DISETUJUI";
           }
           if (_selectedFilter == "Ditolak") {
-            return status.contains("TOLAK");
+            return status == "DITOLAK";
           }
 
           return true;
@@ -255,7 +265,7 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
                 "type": item.jenisIzin ?? "-",
                 "startDate": item.tanggalMulai ?? "-",
                 "endDate": item.tanggalSelesai ?? "-",
-                "status": item.status ?? "-",
+                "status": StatusHelper.mapStatusToIndonesian(item.status),
                 "reason": item.keterangan ?? "-",
                 "fileBukti": item.fileBukti ?? "",
               },
@@ -329,7 +339,10 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
                     item.tanggalSelesai ?? "-",
                   ),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Status", item.status ?? "-"),
+                  _buildDetailRow(
+                    "Status",
+                    StatusHelper.mapStatusToIndonesian(item.status),
+                  ),
                 ],
               ),
             ),

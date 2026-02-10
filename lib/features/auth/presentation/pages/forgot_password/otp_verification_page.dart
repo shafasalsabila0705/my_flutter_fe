@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../../../core/constants/colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/widgets/custom_text_field.dart';
 import '../../../../../core/widgets/custom_button.dart';
 import '../../widgets/auth_header.dart';
 import '../../providers/otp_verification_notifier.dart';
+import '../../providers/forgot_password_notifier.dart';
 import 'reset_password_page.dart';
 
 class OtpVerificationPage extends ConsumerStatefulWidget {
@@ -18,9 +21,39 @@ class OtpVerificationPage extends ConsumerStatefulWidget {
 
 class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   final TextEditingController _otpController = TextEditingController();
+  Timer? _timer;
+  int _start = 60;
+  bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    startTimer();
+  }
+
+  void startTimer() {
+    setState(() {
+      _start = 60;
+      _canResend = false;
+    });
+    const oneSec = Duration(seconds: 1);
+    _timer = Timer.periodic(oneSec, (Timer timer) {
+      if (_start == 0) {
+        setState(() {
+          timer.cancel();
+          _canResend = true;
+        });
+      } else {
+        setState(() {
+          _start--;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _otpController.dispose();
     super.dispose();
   }
@@ -48,6 +81,26 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
         );
       }
 
+      if (next.errorMessage != null &&
+          (previous?.errorMessage != next.errorMessage)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
+
+    ref.listen(forgotPasswordProvider, (previous, next) {
+      if (next.successMessage != null && !next.isLoading) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("OTP berhasil dikirim ulang"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
       if (next.errorMessage != null &&
           (previous?.errorMessage != next.errorMessage)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -97,6 +150,32 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                 isLoading: state.isLoading,
                 icon: Icons.verified_user_rounded,
               ),
+
+              const SizedBox(height: 24),
+
+              // Resend Config
+              if (_canResend)
+                TextButton(
+                  onPressed: () {
+                    // Trigger Resend
+                    ref
+                        .read(forgotPasswordProvider.notifier)
+                        .requestOtp(widget.nip);
+                    startTimer();
+                  },
+                  child: const Text(
+                    "Kirim Ulang OTP",
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  "Kirim ulang dalam 00:${_start.toString().padLeft(2, '0')}",
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
 
               const SizedBox(height: 24),
 

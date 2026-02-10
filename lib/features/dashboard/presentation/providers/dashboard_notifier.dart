@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
 
@@ -7,6 +8,7 @@ import '../../../../core/providers/user_provider.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/domain/usecases/profile/get_profile_usecase.dart';
 import '../../../auth/domain/usecases/logout/logout_usecase.dart';
+import '../../../auth/domain/usecases/profile/get_bawahan_list_usecase.dart'; // Added
 
 import '../../data/models/banner_model.dart';
 import '../../data/models/attendance_model.dart';
@@ -24,6 +26,7 @@ class DashboardState {
   final String? errorMessage;
   final List<BannerModel> banners;
   final List<AttendanceModel> history;
+  final List<User> bawahanList; // Added bawahanList
   final AttendanceModel? todayAttendance;
 
   // Location State
@@ -37,6 +40,7 @@ class DashboardState {
     this.errorMessage,
     this.banners = const [],
     this.history = const [],
+    this.bawahanList = const [], // Init empty
     this.todayAttendance,
     this.currentLocationName = "Memuat lokasi...",
     this.isOutsideRadius = true,
@@ -49,6 +53,7 @@ class DashboardState {
     String? errorMessage,
     List<BannerModel>? banners,
     List<AttendanceModel>? history,
+    List<User>? bawahanList, // Added
     AttendanceModel? todayAttendance,
     String? currentLocationName,
     bool? isOutsideRadius,
@@ -60,6 +65,7 @@ class DashboardState {
       errorMessage: errorMessage ?? this.errorMessage,
       banners: banners ?? this.banners,
       history: history ?? this.history,
+      bawahanList: bawahanList ?? this.bawahanList, // Added
       todayAttendance: todayAttendance ?? this.todayAttendance,
       currentLocationName: currentLocationName ?? this.currentLocationName,
       isOutsideRadius: isOutsideRadius ?? this.isOutsideRadius,
@@ -79,6 +85,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   final GetProfileUseCase _getProfileUseCase;
   final GetLocationUseCase _getLocationUseCase;
   final LogoutUseCase _logoutUseCase;
+  final GetBawahanListUseCase _getBawahanListUseCase; // Added
   final Ref _ref;
 
   DashboardNotifier(
@@ -90,6 +97,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     this._getProfileUseCase,
     this._getLocationUseCase,
     this._logoutUseCase,
+    this._getBawahanListUseCase, // Added
     this._ref,
   ) : super(DashboardState());
 
@@ -100,6 +108,13 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     _getTodayStatus();
     _refreshProfile();
     _getLocation();
+    loadBawahanList();
+  }
+
+  void loadBawahanList() {
+    // Optional: state = state.copyWith(isLoading: true);
+    // If we want to show loading spinner for it.
+    _getBawahanListUseCase.execute(_BawahanListObserver(this));
   }
 
   void _getBanners() {
@@ -130,6 +145,42 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     Function(AttendanceModel)? onSuccess,
     Function(dynamic)? onError,
   }) {
+    // 1. Validate Schedule
+    final schedule = state.todayAttendance?.scheduledCheckInTime;
+    if (schedule == null || schedule == '-') {
+      onFailure("Anda tidak memiliki jadwal hari ini.");
+      if (onError != null) onError("Anda tidak memiliki jadwal hari ini.");
+      return;
+    }
+
+    // Parse Schedule Time
+    try {
+      final now = DateTime.now();
+      final scheduleTime = _parseTime(schedule, now);
+
+      // Calculate limit (1 hour before schedule)
+      final earlyLimit = scheduleTime.subtract(const Duration(hours: 1));
+
+      if (now.isBefore(earlyLimit)) {
+        final diff = earlyLimit.difference(now);
+        final waitingMinutes = diff.inMinutes;
+        final formattedLimit =
+            "${earlyLimit.hour.toString().padLeft(2, '0')}:${earlyLimit.minute.toString().padLeft(2, '0')}";
+
+        final msg =
+            "Belum saatnya absen. Bisa absen mulai pukul $formattedLimit ($waitingMinutes menit lagi).";
+
+        onFailure(msg);
+        if (onError != null) onError(msg);
+        return;
+      }
+    } catch (e) {
+      // Only log parsing error, don't block if format is unexpected, or block?
+      // Safer to allowed if parsing fails or block?
+      // Let's block implies data integrity issue.
+      debugPrint("Time Parsing Error: $e");
+    }
+
     state = state.copyWith(isLoading: true);
     _checkInUseCase.execute(
       _CheckInOutObserver(this, onSuccess, onError),
@@ -143,6 +194,42 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     Function(AttendanceModel)? onSuccess,
     Function(dynamic)? onError,
   }) {
+    // 1. Validate Schedule
+    final schedule = state.todayAttendance?.scheduledCheckOutTime;
+
+    // If no schedule (e.g. holiday or free), usually we allow checkout if checked in?
+    // But user asked: "kalau pulang, kasi juga batasannya".
+    // Assume if no schedule, we might block or allow.
+    // "kalau dia ga ada jadwal... anda tidak memiliki jadwal hari ini" -> logic for Check In.
+    // Logic for Check Out implies same check?
+    if (schedule == null || schedule == '-') {
+      // If already checked in, maybe we shouldn't block checkout even if no schedule?
+      // But user requirement implies strict schedule.
+      // Let's check logic: if checked in, they must have had a schedule or bypassed it.
+      // If we strictly follow "No schedule = No action".
+      onFailure("Tidak ada jadwal pulang hari ini.");
+      if (onError != null) onError("Tidak ada jadwal pulang hari ini.");
+      return;
+    }
+
+    try {
+      final now = DateTime.now();
+      final scheduleTime = _parseTime(schedule, now);
+
+      // Calculate limit (2 hours after schedule)
+      final lateLimit = scheduleTime.add(const Duration(hours: 2));
+
+      if (now.isAfter(lateLimit)) {
+        final msg =
+            "Batas waktu absen pulang telah habis (Maksimal 2 jam setelah jadwal).";
+        onFailure(msg);
+        if (onError != null) onError(msg);
+        return;
+      }
+    } catch (e) {
+      debugPrint("Time Parsing Error: $e");
+    }
+
     state = state.copyWith(isLoading: true);
     _checkOutUseCase.execute(
       _CheckInOutObserver(this, onSuccess, onError),
@@ -150,9 +237,34 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     );
   }
 
+  DateTime _parseTime(String timeStr, DateTime referenceDate) {
+    // Expected format: "HH:mm:ss" or "HH:mm"
+    final parts = timeStr.split(':');
+    if (parts.length < 2) {
+      throw FormatException("Invalid time format: $timeStr");
+    }
+
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+    final second = parts.length > 2 ? int.parse(parts[2]) : 0;
+
+    return DateTime(
+      referenceDate.year,
+      referenceDate.month,
+      referenceDate.day,
+      hour,
+      minute,
+      second,
+    );
+  }
+
   void logout() {
     state = state.copyWith(isLoading: true);
     _logoutUseCase.execute(_LogoutObserver(this));
+  }
+
+  void onBawahanListReceived(List<User> list) {
+    state = state.copyWith(bawahanList: list);
   }
 
   // Callbacks
@@ -326,6 +438,23 @@ class _LogoutObserver extends Observer<void> {
   }
 }
 
+class _BawahanListObserver extends Observer<List<User>> {
+  final DashboardNotifier _notifier;
+  _BawahanListObserver(this._notifier);
+  @override
+  void onNext(List<User>? response) {
+    if (response != null) _notifier.onBawahanListReceived(response);
+  }
+
+  @override
+  void onComplete() {}
+  @override
+  void onError(e) {
+    // Silent error or log?
+    debugPrint("Failed to load bawahan list: $e");
+  }
+}
+
 final dashboardProvider =
     StateNotifierProvider.autoDispose<DashboardNotifier, DashboardState>((ref) {
       return DashboardNotifier(
@@ -337,6 +466,7 @@ final dashboardProvider =
         sl<GetProfileUseCase>(),
         sl<GetLocationUseCase>(),
         sl<LogoutUseCase>(),
+        sl<GetBawahanListUseCase>(),
         ref,
       );
     });

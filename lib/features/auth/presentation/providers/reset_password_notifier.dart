@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
+import '../../../../../core/utils/password_validator.dart';
 
 import '../../../../injection_container.dart';
 import '../../domain/usecases/password/reset_password_usecase.dart';
@@ -43,8 +44,9 @@ class ResetPasswordNotifier extends StateNotifier<ResetPasswordState> {
       state = state.copyWith(errorMessage: 'Konfirmasi password tidak cocok');
       return;
     }
-    if (newPassword.length < 6) {
-      state = state.copyWith(errorMessage: 'Password minimal 6 karakter');
+    final passwordError = PasswordValidator.validate(newPassword);
+    if (passwordError != null) {
+      state = state.copyWith(errorMessage: passwordError);
       return;
     }
 

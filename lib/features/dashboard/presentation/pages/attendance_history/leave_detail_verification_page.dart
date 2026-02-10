@@ -10,7 +10,8 @@ class LeaveDetailVerificationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Check Status to determine if buttons should be shown
-    final bool isPending = (data['status'] ?? 'Menunggu') == 'Menunggu';
+    final bool isPending =
+        (data['status'] ?? 'Menunggu').toUpperCase() == 'MENUNGGU';
 
     // Determine Title
     String title = "Verifikasi Izin Bawahan";
@@ -70,9 +71,25 @@ class LeaveDetailVerificationPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 60),
-                          // Image Placeholder
-                          _buildImagePlaceholder(data['startDate'] ?? "-"),
-                          const SizedBox(height: 24),
+                          // Image Placeholder (Only for TL/CP/Luar Radius)
+                          if ((data['type'] ?? "").toUpperCase().contains(
+                                "TERLAMBAT",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "PULANG",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "RADIUS",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "TL",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "CP",
+                              )) ...[
+                            _buildImagePlaceholder(data['startDate'] ?? "-"),
+                            const SizedBox(height: 24),
+                          ],
 
                           _buildLabel("Nama"),
                           const SizedBox(height: 8),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
-import '../../../../../../core/constants/colors.dart'; // Added Import
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../../../../../core/constants/app_icons.dart';
+
 import 'cuti_history_page.dart';
 import 'cuti_verification_page.dart';
 
@@ -76,11 +78,11 @@ class CutiMenuPage extends ConsumerWidget {
                         _buildMenuItem(
                           title: "Ajukan Cuti",
                           subtitle: "Ajukan permohonan cuti",
-                          icon: Icons.edit_note_rounded,
-                          gradientColors: [
-                            AppColors.primaryBlue.withValues(alpha: 0.8),
-                            AppColors.primaryBlue,
-                          ],
+                          iconWidget: SvgPicture.asset(
+                            AppIcons.ajukanIzin,
+                            width: 24,
+                            height: 24,
+                          ),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -96,11 +98,11 @@ class CutiMenuPage extends ConsumerWidget {
                           _buildMenuItem(
                             title: "Verifikasi Cuti",
                             subtitle: "Verifikasi permohonan cuti bawahan",
-                            icon: Icons.fact_check_rounded,
-                            gradientColors: [
-                              AppColors.primaryBlue.withValues(alpha: 0.8),
-                              AppColors.primaryBlue,
-                            ],
+                            iconWidget: SvgPicture.asset(
+                              AppIcons.verifikasiIzinCuti,
+                              width: 24,
+                              height: 24,
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -165,8 +167,7 @@ class CutiMenuPage extends ConsumerWidget {
   Widget _buildMenuItem({
     required String title,
     required String subtitle,
-    required IconData icon,
-    required List<Color> gradientColors,
+    required Widget iconWidget,
     required VoidCallback onTap,
   }) {
     return Container(
@@ -192,26 +193,24 @@ class CutiMenuPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Gradient Icon Container
+                // White Icon Container for Original SVG Colors
                 Container(
                   width: 50,
                   height: 50,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradientColors,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey.shade200, width: 1),
                     boxShadow: [
                       BoxShadow(
-                        color: gradientColors.first.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        color: Colors.grey.shade200, // Subtle shadow for icon
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: Colors.white, size: 24),
+                  child: iconWidget,
                 ),
                 const SizedBox(width: 16),
 

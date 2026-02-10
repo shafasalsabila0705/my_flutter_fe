@@ -39,6 +39,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     final user = userState.currentUser;
 
+    // Listen to User State changes for Logout
+    ref.listen(userProvider, (previous, next) {
+      if (previous?.currentUser != null && next.currentUser == null) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+    });
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,

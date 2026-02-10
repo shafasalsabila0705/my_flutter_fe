@@ -77,7 +77,12 @@ class UserModel extends User {
       name: (json['name'] ?? json['nama'] ?? json['Nama'] ?? '').toString(),
       email: json['email']?.toString(),
       phone: (json['phone'] ?? json['no_hp'])?.toString(),
-      jabatan: (json['jabatan'] ?? json['Jabatan'])?.toString(),
+      jabatan:
+          (json['jabatan'] ??
+                  json['Jabatan'] ??
+                  json['uraian_jabatan'] ??
+                  json['nama_jabatan'])
+              ?.toString(),
       bidang: (json['bidang'] ?? json['Bidang'])?.toString(),
       atasanId: (json['atasan_id'] ?? json['atasanId'])?.toString(),
       atasanNama: (json['atasan_nama'] ?? json['atasan_name'] ?? json['Atasan'])

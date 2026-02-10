@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
-import '../../../../../../core/constants/colors.dart'; // Added Import
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../../../../../core/constants/app_icons.dart';
+
 import 'leave_history_page.dart'; // Import History Page
 import 'leave_verification_page.dart';
 import 'attendance_verification_page.dart';
@@ -79,11 +81,11 @@ class LeaveMenuPage extends ConsumerWidget {
                           title: "Ajukan Izin",
                           subtitle:
                               "Ajukan izin dinas luar, bimtek, atau tubel",
-                          icon: Icons.edit_note_rounded,
-                          gradientColors: [
-                            AppColors.primaryBlue.withValues(alpha: 0.8),
-                            AppColors.primaryBlue,
-                          ],
+                          iconWidget: SvgPicture.asset(
+                            AppIcons.ajukanIzin,
+                            width: 24,
+                            height: 24,
+                          ),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -99,11 +101,11 @@ class LeaveMenuPage extends ConsumerWidget {
                             title: "Verifikasi Izin Bawahan",
                             subtitle:
                                 "Verifikasi izin dinas luar, bimtek atau tubel bawahan",
-                            icon: Icons.fact_check_rounded,
-                            gradientColors: [
-                              AppColors.primaryBlue.withValues(alpha: 0.8),
-                              AppColors.primaryBlue,
-                            ],
+                            iconWidget: SvgPicture.asset(
+                              AppIcons.verifikasiIzinCuti,
+                              width: 24,
+                              height: 24,
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -119,11 +121,11 @@ class LeaveMenuPage extends ConsumerWidget {
                           _buildMenuItem(
                             title: "Verifikasi Telat / Cepat Pulang",
                             subtitle: "Verifikasi telat / cepat pulang bawahan",
-                            icon: Icons.access_time_filled_rounded,
-                            gradientColors: [
-                              AppColors.primaryBlue.withValues(alpha: 0.8),
-                              AppColors.primaryBlue,
-                            ],
+                            iconWidget: SvgPicture.asset(
+                              AppIcons.verifikasiTLCP,
+                              width: 24,
+                              height: 24,
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -138,11 +140,11 @@ class LeaveMenuPage extends ConsumerWidget {
                           _buildMenuItem(
                             title: "Verifikasi Absen Luar Kantor",
                             subtitle: "Verifikasi absen di luar kantor bawahan",
-                            icon: Icons.location_on_rounded,
-                            gradientColors: [
-                              AppColors.primaryBlue.withValues(alpha: 0.8),
-                              AppColors.primaryBlue,
-                            ],
+                            iconWidget: SvgPicture.asset(
+                              AppIcons.verifikasiLuarRadius,
+                              width: 24,
+                              height: 24,
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -208,8 +210,7 @@ class LeaveMenuPage extends ConsumerWidget {
   Widget _buildMenuItem({
     required String title,
     required String subtitle,
-    required IconData icon,
-    required List<Color> gradientColors,
+    required Widget iconWidget,
     required VoidCallback onTap,
   }) {
     return Container(
@@ -235,26 +236,24 @@ class LeaveMenuPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Gradient Icon Container
+                // White Icon Container for Original SVG Colors
                 Container(
                   width: 50,
                   height: 50,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradientColors,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey.shade200, width: 1),
                     boxShadow: [
                       BoxShadow(
-                        color: gradientColors.first.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        color: Colors.grey.shade200, // Subtle shadow for icon
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: Colors.white, size: 24),
+                  child: iconWidget,
                 ),
                 const SizedBox(width: 16),
 

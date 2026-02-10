@@ -11,7 +11,8 @@ import 'data/repositories/logger_repository_impl.dart';
 import 'features/auth/domain/repositories/auth_repository.dart';
 import 'features/auth/domain/repositories/logger_repository.dart';
 import 'features/auth/domain/usecases/login/login_usecase.dart';
-import 'features/auth/domain/usecases/register/register_usecase.dart';
+
+import 'features/auth/domain/usecases/profile/get_bawahan_list_usecase.dart';
 import 'features/auth/domain/usecases/profile/get_profile_usecase.dart';
 import 'features/auth/domain/usecases/password/request_password_reset_usecase.dart';
 import 'features/auth/domain/usecases/password/verify_otp_usecase.dart';
@@ -54,8 +55,9 @@ Future<void> init() async {
 
   // Use cases
   sl.registerLazySingleton(() => LoginUseCase(sl(), sl()));
-  sl.registerLazySingleton(() => RegisterUseCase(sl(), sl()));
+
   sl.registerLazySingleton(() => GetProfileUseCase(sl(), sl()));
+  sl.registerLazySingleton(() => GetBawahanListUseCase(sl()));
   sl.registerLazySingleton(() => RequestPasswordResetUseCase(sl(), sl()));
   sl.registerLazySingleton(() => VerifyOtpUseCase(sl(), sl()));
   sl.registerLazySingleton(() => ResetPasswordUseCase(sl(), sl()));
@@ -126,7 +128,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => LocationService());
 
   // Define Base URLs
-  String baseUrl = 'http://192.168.1.14:3000';
+  String baseUrl = 'http://192.168.1.15:3000';
 
   try {
     if (Platform.isAndroid) {

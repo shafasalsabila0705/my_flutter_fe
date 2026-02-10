@@ -165,12 +165,28 @@ class CutiDetailVerificationPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Image Preview
-                          _buildEvidenceImage(
-                            fileBukti,
-                            data['startDate'] ?? "-",
-                          ),
-                          const SizedBox(height: 24),
+                          // Image Preview (Only for TL/CP/Luar Radius)
+                          if ((data['type'] ?? "").toUpperCase().contains(
+                                "TERLAMBAT",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "PULANG",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "RADIUS",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "TL",
+                              ) ||
+                              (data['type'] ?? "").toUpperCase().contains(
+                                "CP",
+                              )) ...[
+                            _buildEvidenceImage(
+                              fileBukti,
+                              data['startDate'] ?? "-",
+                            ),
+                            const SizedBox(height: 24),
+                          ],
 
                           _buildInfoSection("Informasi Pegawai", [
                             _buildInfoRow("Nama", data['name'] ?? "-"),

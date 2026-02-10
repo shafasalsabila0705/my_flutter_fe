@@ -40,33 +40,6 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<String> register({
-    required String nip,
-    required String password,
-    required String name,
-    String? email,
-    String? phone,
-  }) async {
-    try {
-      final message = await remoteDataSource.register(
-        nip: nip,
-        password: password,
-        name: name,
-        email: email,
-        phone: phone,
-      );
-      return message;
-    } catch (e, stackTrace) {
-      loggerRepository.error(
-        'Registration failed in repository',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      rethrow;
-    }
-  }
-
-  @override
   Future<void> logout() async {
     try {
       await localDataSource.clearUser();
@@ -144,6 +117,21 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e, stackTrace) {
       loggerRepository.error(
         'Get Atasan List failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<User>> getBawahanList() async {
+    try {
+      final userModels = await remoteDataSource.getBawahanList();
+      return userModels.map((e) => e.toEntity()).toList();
+    } catch (e, stackTrace) {
+      loggerRepository.error(
+        'Get Bawahan List failed',
         error: e,
         stackTrace: stackTrace,
       );

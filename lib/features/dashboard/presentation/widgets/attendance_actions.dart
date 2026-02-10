@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../../../core/services/location_service.dart';
+import '../../../../../../core/services/local_notification_service.dart';
 import '../../../common/presentation/pages/camera_page.dart';
 
 import '../../data/models/attendance_model.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../../../../../core/constants/app_icons.dart';
 
 class AttendanceActions extends StatefulWidget {
   final Future<AttendanceModel> Function(
@@ -218,12 +221,91 @@ class _AttendanceActionsState extends State<AttendanceActions> {
 
     final bool isCheckingIn = !_isClockedIn;
 
+    // --- PRE-VALIDATION (Schedule & Time) ---
+    final scheduleData = widget.initialData;
+    final now = DateTime.now();
+
+    if (isCheckingIn) {
+      // 1. Check if Schedule Exists
+      final scheduleIn = scheduleData?.scheduledCheckInTime;
+      if (scheduleIn == null || scheduleIn.isEmpty || scheduleIn == '-') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Anda tidak memiliki jadwal masuk hari ini."),
+          ),
+        );
+        return;
+      }
+
+      // 2. Check Early Time Limit
+      try {
+        final parts = scheduleIn.split(':');
+        final sHour = int.parse(parts[0]);
+        final sMinute = int.parse(parts[1]);
+        final sDate = DateTime(now.year, now.month, now.day, sHour, sMinute);
+
+        final earlyLimit = sDate.subtract(const Duration(hours: 1));
+
+        if (now.isBefore(earlyLimit)) {
+          final diff = earlyLimit.difference(now).inMinutes;
+          final fmt =
+              "${earlyLimit.hour.toString().padLeft(2, '0')}:${earlyLimit.minute.toString().padLeft(2, '0')}";
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "Belum saatnya absen. Bisa absen mulai pukul $fmt ($diff menit lagi).",
+              ),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        // Ignore parsing error, allow proceed or log?
+      }
+    } else {
+      // Check Out Validation
+      // 1. Check if Schedule Exists
+      final scheduleOut = scheduleData?.scheduledCheckOutTime;
+      if (scheduleOut == null || scheduleOut.isEmpty || scheduleOut == '-') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Anda tidak memiliki jadwal pulang hari ini."),
+          ),
+        );
+        return;
+      }
+
+      // 2. Check Late Time Limit
+      try {
+        final parts = scheduleOut.split(':');
+        final sHour = int.parse(parts[0]);
+        final sMinute = int.parse(parts[1]);
+        final sDate = DateTime(now.year, now.month, now.day, sHour, sMinute);
+
+        final lateLimit = sDate.add(const Duration(hours: 2));
+
+        if (now.isAfter(lateLimit)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Batas waktu absen pulang telah habis (Maksimal 2 jam setelah jadwal).",
+              ),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        // Ignore parsing error
+      }
+    }
+    // ----------------------------------------
+
     // Check-out Validation for Early Leave (Moved inside Try/Catch or handled before)
     // We handle Early Leave Reason collection here (before location check to save battery/time if cancelled)
     // AND Late Check In Reason collection.
 
     String? actionReason;
-    final now = DateTime.now();
+    // now is already defined above
 
     if (isCheckingIn) {
       // CHECK LATE
@@ -692,6 +774,47 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                     !statusNote.toUpperCase().contains('DL')) &&
                 (result.distance == null ||
                     result.distance! <= LocationService.radiusInMeters);
+
+            // 1. Notifikasi Absen Masuk Berhasil
+            LocalNotificationService().showNotification(
+              id: 1,
+              title: 'Absen Masuk Berhasil',
+              body: 'Anda berhasil absen masuk pada pukul $formattedTime',
+            );
+
+            // 2. Jadwalkan Notifikasi Pulang (Misal jam 16:00 atau jadwal pulang)
+            // Ambil jadwal pulang dari initialData jika ada
+            int endHour = 16;
+            int endMinute = 0;
+            if (widget.initialData?.scheduledCheckOutTime != null &&
+                widget.initialData!.scheduledCheckOutTime!.contains(':')) {
+              try {
+                final parts = widget.initialData!.scheduledCheckOutTime!.split(
+                  ':',
+                );
+                endHour = int.parse(parts[0]);
+                endMinute = int.parse(parts[1]);
+              } catch (_) {}
+            }
+
+            final now = DateTime.now();
+            DateTime scheduledDate = DateTime(
+              now.year,
+              now.month,
+              now.day,
+              endHour,
+              endMinute,
+            );
+
+            // Jika jam pulang sudah lewat hari ini, jangan jadwalkan (atau jadwalkan besok? asumsi hari ini)
+            if (scheduledDate.isAfter(now)) {
+              LocalNotificationService().scheduleNotification(
+                id: 2,
+                title: 'Waktunya Pulang!',
+                body: 'Jam kerja telah usai. Jangan lupa absen pulang.',
+                scheduledTime: scheduledDate,
+              );
+            }
           } else {
             // Checking Out
             _isClockedIn = false;
@@ -719,6 +842,17 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                 (dist != null && dist > LocationService.radiusInMeters);
 
             _checkOutLocationValid = !isLuar;
+
+            // 3. Notifikasi Absen Pulang Berhasil
+            LocalNotificationService().showNotification(
+              id: 3,
+              title: 'Absen Pulang Berhasil',
+              body:
+                  'Anda berhasil absen pulang pada pukul $formattedTime. Hati-hati di jalan!',
+            );
+
+            // Batalkan reminder pulang jika sudah absen (id 2)
+            LocalNotificationService().cancelNotification(2);
           }
         });
       });
@@ -793,11 +927,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.ads_click_rounded,
-                          size: 60, // Scaled up
-                          color: primaryColor,
-                        ),
+                        Icon(Icons.fingerprint, size: 60, color: primaryColor),
                         const SizedBox(height: 8),
                         Text(
                           buttonLabel,
@@ -874,12 +1004,12 @@ class _AttendanceActionsState extends State<AttendanceActions> {
       timeIcon = isTimeValid
           ? Icons.check_circle_rounded
           : Icons.cancel_rounded;
-      timeColor = isTimeValid ? Colors.greenAccent : Colors.redAccent;
+      timeColor = isTimeValid ? Colors.blueAccent : Colors.redAccent;
 
       locIcon = isLocationValid
           ? Icons.check_circle_rounded
           : Icons.cancel_rounded;
-      locColor = isLocationValid ? Colors.greenAccent : Colors.redAccent;
+      locColor = isLocationValid ? Colors.blueAccent : Colors.redAccent;
     }
 
     return Column(
@@ -917,10 +1047,14 @@ class _AttendanceActionsState extends State<AttendanceActions> {
 
             const SizedBox(width: 12), // Spacing between groups
             // Location Section
-            const Icon(
-              Icons.location_on_outlined,
-              color: Colors.white,
-              size: 18,
+            SvgPicture.asset(
+              AppIcons.location,
+              width: 18,
+              height: 18,
+              colorFilter: const ColorFilter.mode(
+                Colors.white,
+                BlendMode.srcIn,
+              ),
             ),
             const SizedBox(width: 6),
             Icon(locIcon, color: locColor, size: 20),

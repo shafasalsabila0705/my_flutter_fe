@@ -5,6 +5,7 @@ import '../../../domain/repositories/koreksi_repository.dart';
 import '../../../domain/entities/perizinan.dart';
 import '../../../data/models/perizinan_model.dart';
 import 'cuti_detail_verification_page.dart';
+import '../../../../../../core/utils/status_helper.dart';
 
 class OutOfOfficeVerificationPage extends StatefulWidget {
   const OutOfOfficeVerificationPage({super.key});
@@ -197,27 +198,30 @@ class _OutOfOfficeVerificationPageState
 
         // FILTER LOGIC - SPECIFIC FOR OUT OF OFFICE (LUAR_RADIUS)
         final filteredList = snapshot.data!.where((item) {
-          // 1. Filter by Type (Must be LUAR_RADIUS or similar)
+          // 1. Filter by Type (Must be LUAR_RADIUS)
           final jenis = (item.jenisIzin ?? '').toUpperCase();
 
+          // User request: "verifikasi luar kantor, itu utntuk yang di luar radius"
+          // Removed 'DL' as it belongs to Izin
           bool isOutOfOffice =
-              jenis.contains('LUAR') && jenis.contains('RADIUS') ||
-              jenis.contains('DL') ||
+              (jenis.contains('LUAR') && jenis.contains('RADIUS')) ||
               jenis == 'LUAR_RADIUS';
 
           if (!isOutOfOffice) return false;
 
-          // 2. Filter by Status Tab (Client-side filtering for simplicity)
+          // 2. Filter by Status Tab
           if (_selectedFilter == "Semua") return true;
-          final status = (item.status ?? "").toUpperCase();
+
+          final status = StatusHelper.mapStatusToIndonesian(item.status);
+
           if (_selectedFilter == "Menunggu") {
-            return status.contains("MENUNGGU");
+            return status == "MENUNGGU";
           }
           if (_selectedFilter == "Diterima") {
-            return status.contains("SETUJU") || status.contains("DITERIMA");
+            return status == "DISETUJUI";
           }
           if (_selectedFilter == "Ditolak") {
-            return status.contains("TOLAK");
+            return status == "DITOLAK";
           }
 
           return true;
@@ -325,7 +329,10 @@ class _OutOfOfficeVerificationPageState
                   const SizedBox(height: 8),
                   _buildDetailRow("Tanggal", item.tanggalMulai ?? "-"),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Keterangan", item.status ?? "-"),
+                  _buildDetailRow(
+                    "Keterangan",
+                    StatusHelper.mapStatusToIndonesian(item.status),
+                  ),
                 ],
               ),
             ),

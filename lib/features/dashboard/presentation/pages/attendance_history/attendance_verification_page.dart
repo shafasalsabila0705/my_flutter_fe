@@ -5,6 +5,7 @@ import '../../../domain/repositories/koreksi_repository.dart';
 import '../../../domain/entities/perizinan.dart';
 import '../../../data/models/perizinan_model.dart';
 import 'cuti_detail_verification_page.dart';
+import '../../../../../../core/utils/status_helper.dart';
 
 class AttendanceVerificationPage extends StatefulWidget {
   const AttendanceVerificationPage({super.key});
@@ -213,15 +214,17 @@ class _AttendanceVerificationPageState
 
           // 2. Filter by Status Tab
           if (_selectedFilter == "Semua") return true;
-          final status = (item.status ?? "").toUpperCase();
+
+          final status = StatusHelper.mapStatusToIndonesian(item.status);
+
           if (_selectedFilter == "Menunggu") {
-            return status.contains("MENUNGGU");
+            return status == "MENUNGGU";
           }
           if (_selectedFilter == "Diterima") {
-            return status.contains("SETUJU") || status.contains("DITERIMA");
+            return status == "DISETUJUI";
           }
           if (_selectedFilter == "Ditolak") {
-            return status.contains("TOLAK");
+            return status == "DITOLAK";
           }
 
           return true;
@@ -330,7 +333,10 @@ class _AttendanceVerificationPageState
                   _buildDetailRow("Tanggal", item.tanggalMulai ?? "-"),
                   // For attendance corrections, Start/End are usually same day
                   const SizedBox(height: 8),
-                  _buildDetailRow("Keterangan", item.status ?? "-"),
+                  _buildDetailRow(
+                    "Keterangan",
+                    StatusHelper.mapStatusToIndonesian(item.status),
+                  ),
                 ],
               ),
             ),

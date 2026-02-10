@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
+
 import '../../../../../../core/constants/colors.dart'; // Added Import
 
 import '../../../../../../injection_container.dart';
@@ -419,7 +420,11 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
           value: value,
           child: Row(
             children: [
-              Icon(Icons.category_outlined, color: Colors.blue[700], size: 20),
+              Icon(
+                Icons.category_outlined,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
               const SizedBox(width: 12),
               Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
             ],
@@ -531,7 +536,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                       Navigator.of(context).pop(true); // Close page & refresh
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: AppColors.primaryBlue,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

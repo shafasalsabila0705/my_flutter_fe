@@ -152,6 +152,7 @@ class _LoginObserver implements Observer<User> {
 }
 
 // Provider
-final loginProvider = StateNotifierProvider<LoginNotifier, LoginState>((ref) {
-  return LoginNotifier(sl<LoginUseCase>(), sl<FlutterSecureStorage>());
-});
+final loginProvider =
+    StateNotifierProvider.autoDispose<LoginNotifier, LoginState>((ref) {
+      return LoginNotifier(sl<LoginUseCase>(), sl<FlutterSecureStorage>());
+    });

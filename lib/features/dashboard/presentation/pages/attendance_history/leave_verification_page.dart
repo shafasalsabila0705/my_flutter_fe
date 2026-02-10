@@ -4,6 +4,7 @@ import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/entities/perizinan.dart';
 import 'cuti_detail_verification_page.dart'; // We can reuse or create a new detail page
+import '../../../../../../core/utils/status_helper.dart';
 
 class LeaveVerificationPage extends StatefulWidget {
   const LeaveVerificationPage({super.key});
@@ -200,27 +201,31 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
             return false;
           }
 
-          // 2. Exclude Attendance Statuses (Terlambat, Pulang Cepat, etc.)
+          // 2. Exclude Attendance Statuses AND Cuti
           if (jenis.contains('TERLAMBAT') ||
               jenis.contains('TELAT') ||
               jenis.contains('CEPAT') ||
               jenis.contains('PULANG') ||
               jenis.contains('HADIR') ||
-              jenis.contains('ALPA')) {
+              jenis.contains('ALPA') ||
+              jenis.contains('CUTI')) {
+            // Explicitly exclude CUTI
             return false;
           }
 
           // 3. Filter by Status Tab
           if (_selectedFilter == "Semua") return true;
-          final status = (item.status ?? "").toUpperCase();
+
+          final status = StatusHelper.mapStatusToIndonesian(item.status);
+
           if (_selectedFilter == "Menunggu") {
-            return status.contains("MENUNGGU");
+            return status == "MENUNGGU";
           }
           if (_selectedFilter == "Diterima") {
-            return status.contains("SETUJU") || status.contains("DITERIMA");
+            return status == "DISETUJUI";
           }
           if (_selectedFilter == "Ditolak") {
-            return status.contains("TOLAK");
+            return status == "DITOLAK";
           }
 
           return true;
@@ -262,7 +267,7 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                 "type": item.jenisIzin ?? "-",
                 "startDate": item.tanggalMulai ?? "-",
                 "endDate": item.tanggalSelesai ?? "-",
-                "status": item.status ?? "-",
+                "status": StatusHelper.mapStatusToIndonesian(item.status),
                 "reason": item.keterangan ?? "-",
                 "fileBukti": item.fileBukti ?? "",
               },
@@ -338,7 +343,10 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                     item.tanggalSelesai ?? "-",
                   ),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Keterangan", item.status ?? "-"),
+                  _buildDetailRow(
+                    "Keterangan",
+                    StatusHelper.mapStatusToIndonesian(item.status),
+                  ),
                 ],
               ),
             ),

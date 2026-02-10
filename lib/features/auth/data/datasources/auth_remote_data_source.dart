@@ -3,24 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../core/constants/strings.dart';
+
 import '../../../../core/errors/exceptions.dart';
 import '../models/user_model.dart';
 import '../../../../core/utils/device_utils.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> login(String nip, String password);
-  Future<String> register({
-    required String nip,
-    required String password,
-    required String name,
-    String? email,
-    String? phone,
-  });
+
   Future<UserModel> getProfile();
   Future<void> updateProfile(Map<String, dynamic> data);
   Future<void> updateAtasan(String atasanId);
   Future<List<UserModel>> getAtasanList();
+  Future<List<UserModel>> getBawahanList();
   Future<void> changePassword(String oldPassword, String newPassword);
   Future<String> requestPasswordReset(String nip);
   Future<String> verifyOtp(String nip, String otp);
@@ -106,52 +101,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<String> register({
-    required String nip,
-    required String password,
-    required String name,
-    String? email,
-    String? phone,
-  }) async {
-    try {
-      final deviceInfo = await DeviceUtils.getDeviceInfo();
-
-      final response = await apiClient.post(
-        '/api/register',
-        data: {
-          'nip': nip,
-          'password': password,
-          'name': name,
-          'email': email,
-          'phone': phone,
-          'uuid': deviceInfo['uuid'],
-          'brand': deviceInfo['brand'],
-          'series': deviceInfo['series'],
-        },
-      );
-
-      if (response.statusCode == 200) {
-        return response.data['message'] ?? 'Registrasi Berhasil';
-      } else {
-        throw ServerException(response.statusMessage ?? 'Server Error');
-      }
-    } on DioException catch (e) {
-      // DEBUG LOGGING
-      debugPrint('DIO ERROR: ${e.type} - ${e.message}');
-      debugPrint(
-        'DIO REQUEST: ${e.requestOptions.baseUrl}${e.requestOptions.path}',
-      );
-      debugPrint('DIO RESPONSE: ${e.response?.data}');
-
-      throw ServerException(
-        e.response?.data['message'] ?? e.message ?? AppStrings.networkError,
-      );
-    } catch (e) {
-      throw ServerException(e.toString());
-    }
-  }
-
-  @override
   Future<void> changePassword(String oldPassword, String newPassword) async {
     try {
       final response = await apiClient.put(
@@ -229,6 +178,36 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return data.map((e) => UserModel.fromJson(e)).toList();
       } else {
         throw ServerException('Gagal mengambil daftar atasan');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<List<UserModel>> getBawahanList() async {
+    try {
+      final response = await apiClient.get('/api/asn/bawahan');
+
+      if (response.statusCode == 200) {
+        List<dynamic> data = [];
+        if (response.data is List) {
+          data = response.data;
+        } else if (response.data is Map) {
+          data =
+              response.data['data'] ??
+              response.data['list'] ??
+              response.data['users'] ??
+              response.data['pegawai'] ??
+              [];
+        }
+
+        return data.map((e) => UserModel.fromJson(e)).toList();
+      } else {
+        // Fallback or empty if not found?
+        // If 404, maybe return empty list?
+        // Let's assume standard error handling.
+        throw ServerException('Gagal mengambil daftar bawahan');
       }
     } catch (e) {
       throw ServerException(e.toString());

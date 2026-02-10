@@ -4,16 +4,20 @@ class PasswordValidator {
       return "Password wajib diisi";
     }
 
-    if (value.length < 8) {
-      return "Minimal 8 karakter";
+    List<String> errors = [];
+    if (value.length < 8) errors.add("- Minimal 8 karakter");
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      errors.add("- Harus ada huruf besar");
+    }
+    if (!value.contains(RegExp(r'[a-z]'))) {
+      errors.add("- Harus ada huruf kecil");
+    }
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      errors.add("- Harus ada angka");
     }
 
-    bool hasUppercase = value.contains(RegExp(r'[A-Z]'));
-    bool hasLowercase = value.contains(RegExp(r'[a-z]'));
-    bool hasDigits = value.contains(RegExp(r'[0-9]'));
-
-    if (!hasUppercase || !hasLowercase || !hasDigits) {
-      return "Harus mengandung huruf besar, kecil, dan angka";
+    if (errors.isNotEmpty) {
+      return "Password tidak memenuhi syarat:\n${errors.join('\n')}";
     }
 
     return null;

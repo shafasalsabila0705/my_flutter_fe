@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../../core/constants/colors.dart';
 
 import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/auth_repository.dart';
@@ -187,7 +188,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
                           width: double.infinity,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF42A5F5), Color(0xFF1565C0)],
+                              colors: [
+                                Color(0xFF42A5F5),
+                                AppColors.primaryBlue,
+                              ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -273,7 +277,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF1565C0), width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

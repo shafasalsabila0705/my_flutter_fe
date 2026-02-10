@@ -9,15 +9,6 @@ abstract class AuthRepository {
   /// Throws an exception on failure.
   Future<User> login(String nip, String password);
 
-  /// Registers a new user.
-  Future<String> register({
-    required String nip,
-    required String password,
-    required String name,
-    String? email,
-    String? phone,
-  });
-
   /// Fetches the user profile from remote
   Future<User> getProfile();
 
@@ -40,6 +31,9 @@ abstract class AuthRepository {
 
   /// Fetch list of supervisors (Atasan)
   Future<List<User>> getAtasanList();
+
+  /// Fetch list of subordinates (Bawahan)
+  Future<List<User>> getBawahanList();
 
   /// Change User Password
   Future<void> changePassword(String oldPassword, String newPassword);

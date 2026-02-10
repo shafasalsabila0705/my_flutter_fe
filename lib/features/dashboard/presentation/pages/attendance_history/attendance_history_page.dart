@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
+import '../../../../../../core/constants/colors.dart';
 import 'leave_menu_page.dart'; // Import custom page
 
 import '../../../../../../injection_container.dart';
@@ -10,8 +11,10 @@ import '../../../data/models/attendance_model.dart';
 import '../../../domain/entities/perizinan.dart';
 import 'package:intl/intl.dart';
 
+import 'package:flutter_application_1/features/dashboard/domain/logic/attendance_statistics_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../core/providers/user_provider.dart';
+import '../../providers/dashboard_notifier.dart'; // Added import for dashboardProvider
 import '../../../../auth/domain/entities/user.dart'; // Explicit import for User
 import 'leave_history_page.dart';
 import 'package:image_picker/image_picker.dart';
@@ -162,6 +165,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
     _fetchHistory();
     _fetchTeamRecap(); // Initial fetch
+
+    // Fetch Bawahan List for Job Titles
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(dashboardProvider.notifier).loadBawahanList();
+    });
   }
 
   // Team Recap Future
@@ -393,7 +401,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       children: [
         _buildSummaryCards(),
         const SizedBox(height: 16),
-        _buildLegend(), // Add Legend
+        _buildLegend(),
         const SizedBox(height: 10),
 
         // View Toggle & Title
@@ -442,63 +450,37 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
         final data = snapshot.data!;
 
-        // --- Client-Side Aggregation Logic ---
-        // If summary is 0 but we have details, calculate manually
-        int present = data.present;
-        int late = data.late;
-        int permission = data.permission;
-        int leave = data.leave;
-        int unknown = data.alpha; // Use actual Alpha value from model
+        // Debug
+        // debugPrint("Details Data: ${data.details}");
+
+        // --- Client-Side Aggregation Logic (Moved to Helper) ---
+        final stats = AttendanceStatisticsHelper.calculate(data);
+
+        // Access via stats object
+        int present = stats.present;
+        int lateNoPermit = stats.lateNoPermit;
+        int latePermitted = stats.latePermitted;
+        int permission = stats.permission;
+        int leave = stats.leave;
+        int unknown = stats.unknown;
 
         final details = data.details ?? [];
-        final hasDetails = details.isNotEmpty;
-        final isSummaryEmpty = (present + late + permission + leave) == 0;
 
-        if (isSummaryEmpty && hasDetails) {
-          // debugPrint("Aggregation Required. Details count: ${details.length}");
-          for (var item in details) {
-            if (item is Map) {
-              // Adapt keys based on possible API response
-              final status =
-                  (item['status'] ?? item['status_kehadiran'] ?? 'ALPHA')
-                      .toString()
-                      .toUpperCase();
+        int presentPercentage = stats.presentPercentage;
 
-              if (status.contains('HADIR') || status.contains('TEPAT')) {
-                present++;
-              } else if (status.contains('TERLAMBAT') ||
-                  status.contains('CP')) {
-                late++;
-              } else if (status.contains('IZIN')) {
-                permission++;
-              } else if (status.contains('CUTI')) {
-                leave++;
-              } else {
-                unknown++;
-              }
-            }
-          }
-        } // End of manual aggregation block
-
-        // Calculate Total
-        final total = present + late + permission + leave + unknown;
-        final presentPercentage = total > 0
-            ? ((present / total) * 100).toInt()
-            : 0;
-
-        // Custom Colors Matching Screenshot
+        // Colors
         final hadirColor = const Color(0xFF009668); // Green
-        final tlColor = const Color(0xFFFFC107); // Amber (TL/CP)
-        final izinColor = const Color(0xFF00BCD4); // Cyan (Izin)
-        final cutiColor = const Color(0xFF9C27B0); // Purple (Cuti)
-        final unknownColor = const Color(0xFFF44336); // Red (Masih Kosong)
-        // final defaultColor = const Color(0xFF9E9E9E); // Grey (Belum Absen)
+        final tlColor = const Color(0xFFFFC107); // Amber
+        final tlOkColor = const Color(0xFFFF9800); // Orange
+        final izinColor = const Color(0xFF00BCD4); // Cyan
+        final cutiColor = const Color(0xFF9C27B0); // Purple
+        final unknownColor = const Color(0xFFF44336); // Red
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             children: [
-              // 1. Chart Section (Clean, No Background)
+              // 1. Chart Section
               const Text(
                 "REKAP KEHADIRAN TIM",
                 style: TextStyle(
@@ -512,27 +494,18 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
               // Chart
               SizedBox(
-                height: 180, // Slightly smaller
+                height: 180,
                 width: 180,
                 child: CustomPaint(
                   painter: DonutChartPainter([
+                    ChartData(color: hadirColor, value: present.toDouble()),
+                    ChartData(color: tlColor, value: lateNoPermit.toDouble()),
                     ChartData(
-                      color: hadirColor,
-                      value: present.toDouble(),
-                    ), // Hadir - Green
-                    ChartData(
-                      color: tlColor,
-                      value: late.toDouble(),
-                    ), // Terlambat - Amber
-                    ChartData(
-                      color: izinColor,
-                      value: permission.toDouble(),
-                    ), // Izin - Cyan
-                    ChartData(
-                      color: cutiColor,
-                      value: leave.toDouble(),
-                    ), // Cuti - Purple
-                    // If unknown > 0, we could show it or assume it is handled elsewhere
+                      color: tlOkColor,
+                      value: latePermitted.toDouble(),
+                    ),
+                    ChartData(color: izinColor, value: permission.toDouble()),
+                    ChartData(color: cutiColor, value: leave.toDouble()),
                     ChartData(color: unknownColor, value: unknown.toDouble()),
                   ]),
                   child: Center(
@@ -542,7 +515,6 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        // No bold shadow, just clean
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -550,7 +522,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                           Text(
                             "$presentPercentage%",
                             style: const TextStyle(
-                              color: Color(0xFF009668), // Green text
+                              color: Color(0xFF009668),
                               fontWeight: FontWeight.bold,
                               fontSize: 28,
                             ),
@@ -571,8 +543,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               ),
               const SizedBox(height: 30),
 
-              // 2. Statistics Grid (Compact)
-              // Using Wrap or GridView logic manually with Rows
+              // 2. Statistics Grid
               Row(
                 children: [
                   Expanded(
@@ -584,19 +555,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _buildTeamStatCard("TL / CP", "$late", tlColor),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTeamStatCard("Izin", "$permission", izinColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTeamStatCard("Cuti", "$leave", cutiColor),
+                    child: _buildTeamStatCard(
+                      "TL / CP",
+                      "$lateNoPermit",
+                      tlColor,
+                    ),
                   ),
                 ],
               ),
@@ -605,8 +568,28 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                 children: [
                   Expanded(
                     child: _buildTeamStatCard(
+                      "TL / CP (Diizinkan)",
+                      "$latePermitted",
+                      tlOkColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTeamStatCard("Izin", "$permission", izinColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTeamStatCard("Cuti", "$leave", cutiColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTeamStatCard(
                       "Tanpa Keterangan",
-                      "$unknown", // Placeholder
+                      "$unknown",
                       unknownColor,
                     ),
                   ),
@@ -614,7 +597,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               ),
 
               // 3. Employee List Section
-              if (hasDetails) ...[
+              // Always show if we have subordinates, even if details are empty
+              if (true) ...[
                 const SizedBox(height: 24),
                 const Row(
                   children: [
@@ -635,151 +619,113 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ...details.map((item) {
-                  if (item is! Map) return const SizedBox.shrink();
-                  final name =
-                      item['nama'] ??
-                      item['name'] ??
-                      item['user']?['nama'] ??
-                      'Unknown';
-                  // Check if item is a Monthly Summary (has 'stats') or Daily Log
-                  final stats = item['stats'];
-                  String statusText = '';
-                  String rightInfo = '';
-                  Color badgeColor = Colors.grey;
 
-                  if (stats is Map) {
-                    // --- Monthly Summary Logic ---
-                    int totalHadir =
-                        (stats['total_kehadiran'] ??
-                                stats['hadir_tepat_waktu'] ??
-                                0)
-                            as int;
-                    int alpha = (stats['tk'] ?? stats['alfa'] ?? 0) as int;
-                    int izin = (stats['i'] ?? stats['izin'] ?? 0) as int;
-                    int cuti = (stats['c'] ?? stats['cuti'] ?? 0) as int;
-                    // Sum up lateness variations (Old + New)
-                    int telat =
-                        ((stats['tl'] ?? 0) +
-                                (stats['cp'] ?? 0) +
-                                (stats['tl_cp'] ?? 0) + // New Key
-                                (stats['tl_cp_diizinkan'] ?? 0) + // New Key
-                                (stats['t1'] ?? 0) +
-                                (stats['t2'] ?? 0))
-                            as int;
+                // List Items from Bawahan List
+                Builder(
+                  builder: (context) {
+                    final bawahanList = ref
+                        .watch(dashboardProvider)
+                        .bawahanList;
 
-                    List<String> parts = [];
-                    if (totalHadir > 0) parts.add("Hadir: $totalHadir");
-                    if (telat > 0) parts.add("TL: $telat");
-                    if (izin > 0) parts.add("Izin: $izin");
-                    if (cuti > 0) parts.add("Cuti: $cuti");
-                    if (alpha > 0) parts.add("Tanpa Ket: $alpha");
+                    // Fallback Logic: Use 'details' if 'bawahanList' is empty
+                    // details is List<dynamic> from the recap model
+                    var effectiveList = [];
+                    bool useBawahanList = false;
 
-                    if (parts.isEmpty) {
-                      statusText = "Belum Ada Data";
-                      badgeColor = unknownColor;
-                    } else {
-                      statusText = parts.join(" • ");
-                      // Color priority: Present > Permit > Alpha
-                      if (totalHadir > 0) {
-                        badgeColor = hadirColor;
-                      } else if (izin > 0 || cuti > 0) {
-                        badgeColor = izinColor;
-                      } else {
-                        badgeColor = unknownColor;
-                      }
+                    if (bawahanList.isNotEmpty) {
+                      effectiveList = bawahanList;
+                      useBawahanList = true;
+                    } else if (details.isNotEmpty) {
+                      effectiveList = details;
+                      useBawahanList = false;
                     }
-                    rightInfo = item['nip']?.toString() ?? '-';
-                  } else {
-                    // --- Daily Log Logic (Fallback) ---
-                    final status =
-                        (item['status'] ?? item['status_kehadiran'] ?? 'ALPHA')
-                            .toString()
-                            .toUpperCase();
-                    statusText = status;
-                    rightInfo = item['jam_masuk'] ?? item['time'] ?? '-';
 
-                    if (status.contains('HADIR')) {
-                      badgeColor = hadirColor;
-                    } else if (status.contains('TERLAMBAT')) {
-                      badgeColor = tlColor;
-                    } else if (status.contains('IZIN')) {
-                      badgeColor = izinColor;
-                    } else if (status.contains('CUTI')) {
-                      badgeColor = cutiColor;
-                    } else if (status.contains('ALPHA')) {
-                      badgeColor = unknownColor;
-                    }
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: badgeColor.withValues(alpha: 0.1),
-                          radius: 18,
-                          child: Icon(
-                            Icons.person,
-                            color: badgeColor,
-                            size: 16,
+                    if (effectiveList.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Center(
+                          child: Text(
+                            "Belum ada data pegawai.",
+                            style: TextStyle(color: Colors.grey),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      );
+                    }
+
+                    return Column(
+                      children: effectiveList.map((item) {
+                        // Normalize item to User info
+                        String name = 'Unknown';
+                        String nip = '-';
+
+                        if (useBawahanList && item is User) {
+                          name = item.name;
+                          nip = item.nip;
+                        } else if (item is Map) {
+                          name =
+                              item['nama'] ??
+                              item['name'] ??
+                              item['user']?['nama'] ??
+                              'Unknown';
+                          nip = item['nip']?.toString() ?? '-';
+                        }
+
+                        // Stats Logic Removed as per request (Name & NIP only)
+                        Color badgeColor = Colors.blueAccent;
+                        String rightInfo = nip;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                              CircleAvatar(
+                                backgroundColor: badgeColor.withValues(
+                                  alpha: 0.1,
+                                ),
+                                radius: 18,
+                                child: Icon(
+                                  Icons.person,
+                                  color: badgeColor,
+                                  size: 16,
                                 ),
                               ),
-                              Text(
-                                statusText,
-                                style: TextStyle(
-                                  color: badgeColor,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      rightInfo,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        Text(
-                          rightInfo,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-
-              // Debug Info for User/Dev (Temporary)
-              if (total == 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    color: Colors.grey.shade100,
-                    child: SelectableText(
-                      "Debug Info:\nTotal: $total\nPresent: $present\nDetails Count: ${details.length}\nHas Details: $hasDetails\nRaw Data Sample: ${hasDetails ? details.first.keys.toString() : 'No Details'}",
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ),
+                        );
+                      }).toList(),
+                    );
+                  },
                 ),
+              ],
             ],
           ),
         );
@@ -853,47 +799,6 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLegend() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: [
-          _buildLegendItem("Hadir", const Color(0xFF009668)),
-          _buildLegendItem("TL / CP", const Color(0xFFFFC107)),
-          _buildLegendItem("Izin", const Color(0xFF00BCD4)),
-          _buildLegendItem("Cuti", const Color(0xFF9C27B0)),
-          _buildLegendItem("Tanpa Ket.", const Color(0xFFF44336)),
-          _buildLegendItem("Belum Absen", const Color(0xFF757575)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Colors.black54,
-          ),
-        ),
-      ],
     );
   }
 
@@ -990,8 +895,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF0288D1), // Light Blue like 'Jam Kerja'
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFF1F5F9), // Very light cool grey
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -1006,21 +911,29 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     bool isSelected = _selectedTab == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedTab = index),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected
-              ? Border.all(color: const Color(0xFF0288D1), width: 2)
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Color.fromRGBO(0, 0, 0, 0.05),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
               : null,
         ),
-        margin: const EdgeInsets.all(2),
+        margin: const EdgeInsets.all(4),
         child: Text(
           label,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF0288D1) : Colors.white,
+            color: isSelected ? const Color(0xFF0288D1) : Colors.grey.shade600,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -1051,7 +964,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     Icon(
                       Icons.calendar_today_outlined,
                       size: 18,
-                      color: const Color(0xFF1565C0).withValues(alpha: 0.7),
+                      color: AppColors.primaryBlue.withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 12),
                     Text(
@@ -1094,39 +1007,53 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     return days;
   }
 
-  Map<String, dynamic> _calculateSummaryData() {
+  Widget _buildSummaryCards() {
+    // Map back to the 3-card summary format using the detailed stats
+    // Hari Kerja: Hadir + TL/CP (All)
+    // Terlambat: Duration (needs original _calculateSummaryData logic or just re-implement duration calc here?)
+    // Actually, let's keep _calculateDetailedStats for the COUNTS,
+    // but we might need the original duration logic for "Terlambat" and "Jam Kerja" cards.
+    // Let's re-add the duration logic into a helper or just Inline it back into _calculateSummaryData
+    // BUT the user wants the 7-color breakdown.
+    // Wait, the user said "tampilan nya kaya yang tadi aja" (like before), "tapi yang tadi itu warna nya kurang 1" (but missing 1 color).
+    // The "tadi" (before) view had:
+    // 1. Summary Cards (Hari Kerja, Terlambat, Jam Kerja)
+    // 2. Legend (6 items)
+    // The user wants THAT view, but with 7 items in Legend.
+
+    // So I need to:
+    // 1. Restore _calculateSummaryData (for the cards)
+    // 2. Restore _buildSummaryCards (using _calculateSummaryData)
+    // 3. Restore _buildLegend (with 7 items)
+    // 4. Remove _buildPersonalStatistics
+
+    // Let's first re-implement _calculateSummaryData (Duration based)
     int presentCount = 0;
     int totalLateMinutes = 0;
     int totalWorkMinutes = 0;
     int workDaysCount = 0;
 
-    // Determine context year/month for calculation
     int currentYear = DateTime.now().year;
     int currentMonthIndex = _months.indexOf(_selectedMonth) + 1;
-
-    // Calculate total possible working days for this specific month
     int totalWorkingDays = _getWorkingDaysInMonth(
       currentYear,
       currentMonthIndex,
     );
 
     for (var item in _historyList) {
-      // 1. Calculate Presence
-      final status = item.status.toUpperCase();
-      if ([
-        'HADIR',
-        'TEPAT WAKTU',
-        'TERLAMBAT',
-        'PULANG CEPAT',
-      ].contains(status)) {
+      final status = (item.status).toUpperCase();
+      if (status.contains('HADIR') ||
+          status.contains('TEPAT') ||
+          status.contains('TERLAMBAT') ||
+          status.contains('PULANG') ||
+          status.contains('CP')) {
         presentCount++;
       }
 
-      // Time Helpers
+      // Parsing logic
       DateTime? parseTime(String? timeStr) {
         if (timeStr == null || timeStr == '-' || timeStr.isEmpty) return null;
         try {
-          // Normalizes HH:mm or HH:mm:ss
           final parts = timeStr.split(':');
           final now = DateTime.now();
           return DateTime(
@@ -1147,19 +1074,16 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       final scheduledIn = parseTime(item.scheduledCheckInTime ?? "08:00:00");
       final scheduledOut = parseTime(item.scheduledCheckOutTime ?? "16:00:00");
 
-      // 2. Calculate Late (TL + CP)
-      if (checkIn != null && scheduledIn != null) {
-        if (checkIn.isAfter(scheduledIn)) {
-          totalLateMinutes += checkIn.difference(scheduledIn).inMinutes;
-        }
+      if (checkIn != null &&
+          scheduledIn != null &&
+          checkIn.isAfter(scheduledIn)) {
+        totalLateMinutes += checkIn.difference(scheduledIn).inMinutes;
       }
-      if (checkOut != null && scheduledOut != null) {
-        if (checkOut.isBefore(scheduledOut)) {
-          totalLateMinutes += scheduledOut.difference(checkOut).inMinutes;
-        }
+      if (checkOut != null &&
+          scheduledOut != null &&
+          checkOut.isBefore(scheduledOut)) {
+        totalLateMinutes += scheduledOut.difference(checkOut).inMinutes;
       }
-
-      // 3. Calculate Work Duration
       if (checkIn != null && checkOut != null) {
         final duration = checkOut.difference(checkIn).inMinutes;
         if (duration > 0) {
@@ -1169,7 +1093,6 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       }
     }
 
-    // Format Helpers
     String formatDuration(int minutes) {
       if (minutes == 0) return "0 menit";
       final h = minutes ~/ 60;
@@ -1179,20 +1102,9 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       return "$m menit";
     }
 
-    // Averages
     int avgWorkMinutes = workDaysCount > 0
         ? (totalWorkMinutes / workDaysCount).round()
         : 0;
-
-    return {
-      "hari_kerja": "$presentCount/$totalWorkingDays hari",
-      "terlambat": formatDuration(totalLateMinutes),
-      "jam_kerja": formatDuration(avgWorkMinutes),
-    };
-  }
-
-  Widget _buildSummaryCards() {
-    final summary = _calculateSummaryData();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1201,7 +1113,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           Expanded(
             child: _buildCard(
               "Hari Kerja",
-              summary['hari_kerja'],
+              "$presentCount/$totalWorkingDays hari",
               const Color(0xFF66BB6A),
               Icons.calendar_today,
             ),
@@ -1210,7 +1122,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           Expanded(
             child: _buildCard(
               "Terlambat",
-              summary['terlambat'],
+              formatDuration(totalLateMinutes),
               const Color(0xFFFFC107), // Amber for Late
               Icons.assignment_late_outlined,
             ),
@@ -1218,14 +1130,59 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
           const SizedBox(width: 10),
           Expanded(
             child: _buildCard(
-              "Jam Kerja (Rata2)", // Clarified label
-              summary['jam_kerja'],
+              "Jam Kerja (Rata2)",
+              formatDuration(avgWorkMinutes),
               const Color(0xFF0288D1),
               Icons.work_outline,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // Restore Legend with 6 Items (Removed Belum Absen)
+  Widget _buildLegend() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          _buildLegendItem("Hadir", const Color(0xFF009668)),
+          _buildLegendItem("TL / CP", const Color(0xFFFFC107)),
+          _buildLegendItem(
+            "TL / CP (Diizinkan)",
+            const Color(0xFFFF9800),
+          ), // Orange
+          _buildLegendItem("Izin", const Color(0xFF00BCD4)),
+          _buildLegendItem("Cuti", const Color(0xFF9C27B0)),
+          _buildLegendItem("Tanpa Ket.", const Color(0xFFF44336)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.black54,
+          ),
+        ),
+      ],
     );
   }
 
