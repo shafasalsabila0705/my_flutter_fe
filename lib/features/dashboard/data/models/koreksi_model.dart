@@ -25,7 +25,15 @@ class KoreksiModel extends Koreksi {
       tanggalKehadiran: json['tanggal_kehadiran']?.toString(),
       tipeKoreksi: json['tipe_koreksi']?.toString(),
       alasan: json['alasan']?.toString(),
-      fileBukti: json['file_bukti']?.toString(),
+      fileBukti:
+          (json['file_bukti'] ??
+                  json['path_file'] ??
+                  json['bukti'] ??
+                  json['lampiran'] ??
+                  json['attachment'] ??
+                  json['foto'] ??
+                  json['image'])
+              ?.toString(),
       status: json['status']?.toString(),
       name:
           (user?['nama'] ??

@@ -42,9 +42,20 @@ class LocalNotificationService {
         // Handle notification tap
       },
     );
+
+    // Request permissions for Android
+    final androidImplementation = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
+    if (androidImplementation != null) {
+      await androidImplementation.requestNotificationsPermission();
+      await androidImplementation.requestExactAlarmsPermission();
+    }
   }
 
-  Future<void> showNotification({
+  Future<void> showAttendanceNotification({
     required int id,
     required String title,
     required String body,
@@ -57,10 +68,16 @@ class LocalNotificationService {
           importance: Importance.max,
           priority: Priority.high,
           showWhen: true,
+          styleInformation: BigTextStyleInformation(''),
         );
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
     );
 
     await flutterLocalNotificationsPlugin.show(
@@ -71,12 +88,15 @@ class LocalNotificationService {
     );
   }
 
-  Future<void> scheduleNotification({
+  Future<void> scheduleAttendanceReminder({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledTime,
   }) async {
+    // Prevent scheduling if time is in the past
+    if (scheduledTime.isBefore(DateTime.now())) return;
+
     await flutterLocalNotificationsPlugin.zonedSchedule(
       id: id,
       title: title,
@@ -89,9 +109,17 @@ class LocalNotificationService {
           channelDescription: 'Reminders to check out',
           importance: Importance.high,
           priority: Priority.high,
+          styleInformation: BigTextStyleInformation(''),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents:
+          DateTimeComponents.time, // Daily reminder if needed
     );
   }
 

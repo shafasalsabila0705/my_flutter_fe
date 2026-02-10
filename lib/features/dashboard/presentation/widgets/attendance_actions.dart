@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../../../core/services/location_service.dart';
-import '../../../../../../core/services/local_notification_service.dart';
 import '../../../common/presentation/pages/camera_page.dart';
 
 import '../../data/models/attendance_model.dart';
@@ -1038,46 +1037,8 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                 (result.distance == null ||
                     result.distance! <= LocationService.radiusInMeters);
 
-            // 1. Notifikasi Absen Masuk Berhasil
-            LocalNotificationService().showNotification(
-              id: 1,
-              title: 'Absen Masuk Berhasil',
-              body: 'Anda berhasil absen masuk pada pukul $formattedTime',
-            );
-
-            // 2. Jadwalkan Notifikasi Pulang (Misal jam 16:00 atau jadwal pulang)
-            // Ambil jadwal pulang dari initialData jika ada
-            int endHour = 16;
-            int endMinute = 0;
-            if (widget.initialData?.scheduledCheckOutTime != null &&
-                widget.initialData!.scheduledCheckOutTime!.contains(':')) {
-              try {
-                final parts = widget.initialData!.scheduledCheckOutTime!.split(
-                  ':',
-                );
-                endHour = int.parse(parts[0]);
-                endMinute = int.parse(parts[1]);
-              } catch (_) {}
-            }
-
-            final now = DateTime.now();
-            DateTime scheduledDate = DateTime(
-              now.year,
-              now.month,
-              now.day,
-              endHour,
-              endMinute,
-            );
-
-            // Jika jam pulang sudah lewat hari ini, jangan jadwalkan (atau jadwalkan besok? asumsi hari ini)
-            if (scheduledDate.isAfter(now)) {
-              LocalNotificationService().scheduleNotification(
-                id: 2,
-                title: 'Waktunya Pulang!',
-                body: 'Jam kerja telah usai. Jangan lupa absen pulang.',
-                scheduledTime: scheduledDate,
-              );
-            }
+            // 1. Notifikasi Absen Masuk Berhasil & Jadwal Reminder
+            // Moved to DashboardNotifier to follow Architecture Guide
           } else {
             // Checking Out
             _isClockedIn = false;
@@ -1107,15 +1068,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
             _checkOutLocationValid = !isLuar;
 
             // 3. Notifikasi Absen Pulang Berhasil
-            LocalNotificationService().showNotification(
-              id: 3,
-              title: 'Absen Pulang Berhasil',
-              body:
-                  'Anda berhasil absen pulang pada pukul $formattedTime. Hati-hati di jalan!',
-            );
-
-            // Batalkan reminder pulang jika sudah absen (id 2)
-            LocalNotificationService().cancelNotification(2);
+            // Moved to DashboardNotifier to follow Architecture Guide
           }
         });
       });

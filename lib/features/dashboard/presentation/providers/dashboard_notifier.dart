@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'dart:async'; // Added for Completer
+import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
 
 import '../../../../injection_container.dart';
 import '../../../../core/providers/user_provider.dart';
+import '../../../../core/services/local_notification_service.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/domain/usecases/profile/get_profile_usecase.dart';
 import '../../../auth/domain/usecases/logout/logout_usecase.dart';
@@ -78,6 +80,9 @@ class DashboardState {
 
 // Notifier
 class DashboardNotifier extends StateNotifier<DashboardState> {
+  static const int notificationIdCheckIn = 100;
+  static const int notificationIdCheckOut = 101;
+
   final GetBannersUseCase _getBannersUseCase;
   final GetAttendanceHistoryUseCase _getHistoryUseCase;
   final GetTodayAttendanceUseCase _getTodayUseCase;
@@ -87,6 +92,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   final GetLocationUseCase _getLocationUseCase;
   final LogoutUseCase _logoutUseCase;
   final GetBawahanListUseCase _getBawahanListUseCase; // Added
+  final LocalNotificationService _notificationService;
   final Ref _ref;
 
   DashboardNotifier(
@@ -99,6 +105,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     this._getLocationUseCase,
     this._logoutUseCase,
     this._getBawahanListUseCase, // Added
+    this._notificationService,
     this._ref,
   ) : super(DashboardState());
 
@@ -269,7 +276,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 
     state = state.copyWith(isLoading: true);
     _checkInUseCase.execute(
-      _CheckInOutObserver(this, onSuccess, onError),
+      _CheckInOutObserver(this, false, onSuccess, onError),
       CheckInParams(lat: lat, long: long, photo: photo, reason: reason),
     );
   }
@@ -318,7 +325,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 
     state = state.copyWith(isLoading: true);
     _checkOutUseCase.execute(
-      _CheckInOutObserver(this, onSuccess, onError),
+      _CheckInOutObserver(this, true, onSuccess, onError),
       CheckOutParams(lat: lat, long: long),
     );
   }
@@ -367,6 +374,9 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   void onTodayReceived(AttendanceModel? today) {
     state = state.copyWith(todayAttendance: today);
     _checkLoading();
+
+    // Logic to schedule/cancel reminders
+    if (today != null) {}
   }
 
   void onProfileReceived(User user) {
@@ -382,7 +392,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     );
   }
 
-  void onCheckInOutSuccess(AttendanceModel result) {
+  void onCheckInOutSuccess(AttendanceModel result, bool isCheckOutAction) {
     debugPrint("--- CHECK-IN/OUT SUCCESS RAW RESULT ---");
     debugPrint("RESULT JSON: ${result.toJson()}");
     debugPrint("----------------------------------------");
@@ -403,32 +413,63 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
           checkInTime: current.checkInTime,
           checkInCoordinates: current.checkInCoordinates,
           status: current.status, // Preserve check-in status
-          scheduledCheckInTime:
-              result.scheduledCheckInTime ?? current.scheduledCheckInTime,
-          scheduledCheckOutTime:
-              result.scheduledCheckOutTime ?? current.scheduledCheckOutTime,
+          scheduledCheckInTime: _isUseful(result.scheduledCheckInTime)
+              ? result.scheduledCheckInTime
+              : current.scheduledCheckInTime,
+          scheduledCheckOutTime: _isUseful(result.scheduledCheckOutTime)
+              ? result.scheduledCheckOutTime
+              : current.scheduledCheckOutTime,
           // Distance might also be useful to keep if checkout one is null
           distance: result.distance ?? current.distance,
-          statusKeluar: result.statusKeluar ?? current.statusKeluar,
-          statusLokasiMasuk:
-              result.statusLokasiMasuk ?? current.statusLokasiMasuk,
-          statusLokasiPulang:
-              result.statusLokasiPulang ?? current.statusLokasiPulang,
+          statusKeluar: _isUseful(result.statusKeluar)
+              ? result.statusKeluar
+              : current.statusKeluar,
+          statusLokasiMasuk: _isUseful(result.statusLokasiMasuk)
+              ? result.statusLokasiMasuk
+              : current.statusLokasiMasuk,
+          statusLokasiPulang: _isUseful(result.statusLokasiPulang)
+              ? result.statusLokasiPulang
+              : current.statusLokasiPulang,
         );
       }
     }
 
     state = state.copyWith(isLoading: false, todayAttendance: finalizedResult);
     _getHistory();
+    _getTodayStatus(); // Refresh full today status to be sure
+
+    final String timeNow = DateFormat('HH:mm').format(DateTime.now());
+
+    if (isCheckOutAction) {
+      _notificationService.showAttendanceNotification(
+        id: notificationIdCheckOut,
+        title: 'Absen Pulang Berhasil',
+        body:
+            'Anda baru saja melakukan absen pulang pada jam $timeNow. Hati-hati di jalan!',
+      );
+    } else {
+      _notificationService.showAttendanceNotification(
+        id: notificationIdCheckIn,
+        title: 'Absen Masuk Berhasil',
+        body:
+            'Anda baru saja melakukan absen masuk pada jam $timeNow. Semangat bekerja!',
+      );
+    }
   }
 
   void onLogoutSuccess() {
     state = state.copyWith(isLoading: false);
     _ref.read(userProvider.notifier).clearUser();
+    // Cancel any pending notifications on logout
+    _notificationService.cancelAllNotifications();
   }
 
   void onFailure(dynamic error) {
     state = state.copyWith(isLoading: false, errorMessage: error.toString());
+  }
+
+  bool _isUseful(String? val) {
+    return val != null && val.isNotEmpty && val != '-';
   }
 
   void _checkLoading() {
@@ -489,15 +530,21 @@ class _TodayObserver extends Observer<AttendanceModel?> {
 
 class _CheckInOutObserver extends Observer<AttendanceModel> {
   final DashboardNotifier _notifier;
+  final bool isCheckOut;
   final Function(AttendanceModel)? onSuccess;
   final Function(dynamic)? onErrorCallback;
 
-  _CheckInOutObserver(this._notifier, [this.onSuccess, this.onErrorCallback]);
+  _CheckInOutObserver(
+    this._notifier,
+    this.isCheckOut, [
+    this.onSuccess,
+    this.onErrorCallback,
+  ]);
 
   @override
   void onNext(AttendanceModel? response) {
     if (response != null) {
-      _notifier.onCheckInOutSuccess(response);
+      _notifier.onCheckInOutSuccess(response, isCheckOut);
       if (onSuccess != null) onSuccess!(response);
     }
   }
@@ -635,6 +682,7 @@ final dashboardProvider =
         sl<GetLocationUseCase>(),
         sl<LogoutUseCase>(),
         sl<GetBawahanListUseCase>(),
+        sl<LocalNotificationService>(),
         ref,
       );
     });

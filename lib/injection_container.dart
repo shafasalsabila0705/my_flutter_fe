@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'core/services/location_service.dart';
+import 'core/services/local_notification_service.dart';
 
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
@@ -128,7 +129,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => LocationService());
 
   // Define Base URLs
-  String baseUrl = 'http://192.168.1.138:3000';
+  String baseUrl = 'http://192.168.1.27:3000';
 
   try {
     if (Platform.isAndroid) {
@@ -151,4 +152,7 @@ Future<void> init() async {
 
   // Secure Storage
   sl.registerLazySingleton(() => const FlutterSecureStorage());
+
+  // Services
+  sl.registerLazySingleton(() => LocalNotificationService());
 }

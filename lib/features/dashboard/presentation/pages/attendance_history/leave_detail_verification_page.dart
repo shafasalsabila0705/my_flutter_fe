@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
-import '../../../../../../core/constants/colors.dart'; // Added Import
+import '../../../../../../core/network/api_client.dart';
+import '../../../../../../injection_container.dart';
+import '../../../../../../core/constants/colors.dart';
 
 class LeaveDetailVerificationPage extends StatelessWidget {
   final Map<String, String> data;
@@ -92,7 +94,10 @@ class LeaveDetailVerificationPage extends StatelessWidget {
                               (data['type'] ?? "").toUpperCase().contains(
                                 "CP",
                               )) ...[
-                            _buildImagePlaceholder(data['startDate'] ?? "-"),
+                            _buildImagePlaceholder(
+                              data['fileBukti'],
+                              data['startDate'] ?? "-",
+                            ),
                             const SizedBox(height: 24),
                           ],
 
@@ -205,24 +210,93 @@ class LeaveDetailVerificationPage extends StatelessWidget {
     );
   }
 
-  Widget _buildImagePlaceholder(String date) {
+  Widget _buildImagePlaceholder(String? imageUrl, String date) {
+    final String baseUrl = sl<ApiClient>().dio.options.baseUrl;
+    String fullImageUrl = imageUrl ?? "";
+
+    if (fullImageUrl.isNotEmpty &&
+        fullImageUrl != '-' &&
+        !fullImageUrl.startsWith('http')) {
+      final cleanPath = fullImageUrl.startsWith('/')
+          ? fullImageUrl.substring(1)
+          : fullImageUrl;
+      fullImageUrl = '$baseUrl/$cleanPath';
+    }
+
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          height: 250, // Square-ish
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.black, width: 1),
+        AspectRatio(
+          aspectRatio:
+              1, // Change to Square to better accommodate portrait photos
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50, // Light background for letterboxing
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: (fullImageUrl.isNotEmpty && fullImageUrl != '-')
+                  ? Image.network(
+                      fullImageUrl,
+                      fit: BoxFit.contain, // Ensure full photo is visible
+                      errorBuilder: (ctx, err, stack) => const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.broken_image,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            "Gagal memuat gambar",
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 40,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Tidak ada bukti lampiran",
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+            ),
           ),
-          // Placeholder for real image later
         ),
-        const SizedBox(height: 8),
-        Text(
-          date,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          textAlign: TextAlign.center,
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE3F2FD),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            date,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: AppColors.primaryBlue,
+            ),
+          ),
         ),
       ],
     );

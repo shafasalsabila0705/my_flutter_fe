@@ -34,7 +34,15 @@ class PerizinanModel extends Perizinan {
                   json['reason'])
               ?.toString(),
       status: json['status']?.toString(),
-      fileBukti: json['file_bukti']?.toString(),
+      fileBukti:
+          (json['file_bukti'] ??
+                  json['path_file'] ??
+                  json['bukti'] ??
+                  json['lampiran'] ??
+                  json['attachment'] ??
+                  json['foto'] ??
+                  json['image'])
+              ?.toString(),
       name:
           (user?['nama'] ??
                   user?['name'] ??
@@ -73,7 +81,15 @@ class PerizinanModel extends Perizinan {
                   json['reason'])
               ?.toString(),
       status: json['status']?.toString(),
-      fileBukti: json['file_bukti']?.toString(),
+      fileBukti:
+          (json['file_bukti'] ??
+                  json['path_file'] ??
+                  json['bukti'] ??
+                  json['lampiran'] ??
+                  json['attachment'] ??
+                  json['foto'] ??
+                  json['image'])
+              ?.toString(),
       name:
           (user?['nama'] ??
                   user?['name'] ??

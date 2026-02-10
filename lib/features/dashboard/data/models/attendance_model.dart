@@ -57,18 +57,18 @@ class AttendanceModel extends Equatable {
       distance: (json['jarak'] as num?)?.toDouble(),
       checkInCoordinates: json['koordinat_masuk'],
       date: json['tanggal'],
-      // Parse Scheduled Times (Try flat, then nested)
+      // Parse Scheduled Times (Try specific jadwal first, then generic shift, then flat)
       scheduledCheckInTime:
-          json['jam_masuk'] ??
-          json['jam_masuk_jadwal'] ??
+          json['jadwal']?['jam_masuk'] ??
           json['shift']?['jam_masuk'] ??
-          json['jadwal']?['jam_masuk'],
+          json['jam_masuk_jadwal'] ??
+          json['jam_masuk'],
 
       scheduledCheckOutTime:
-          json['jam_pulang'] ??
-          json['jam_pulang_jadwal'] ??
+          json['jadwal']?['jam_pulang'] ??
           json['shift']?['jam_pulang'] ??
-          json['jadwal']?['jam_pulang'],
+          json['jam_pulang_jadwal'] ??
+          json['jam_pulang'],
     );
   }
 

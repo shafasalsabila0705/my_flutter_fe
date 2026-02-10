@@ -5,6 +5,7 @@ import '../../../../../../core/constants/colors.dart'; // Added Import
 import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/repositories/koreksi_repository.dart';
+import '../../../../../../core/network/api_client.dart'; // Added Import
 
 class CutiDetailVerificationPage extends StatelessWidget {
   final Map<String, String> data;
@@ -114,6 +115,19 @@ class CutiDetailVerificationPage extends StatelessWidget {
         .contains('MENUNGGU'); // Robust check
     final String fileBukti = data['fileBukti'] ?? '';
 
+    // Determine Title
+    String title = "Verifikasi Cuti Bawahan";
+    String type = data['type'] ?? "";
+    if (type.toUpperCase().contains("TERLAMBAT") ||
+        type.toUpperCase().contains("PULANG") ||
+        type.toUpperCase().contains("TL") ||
+        type.toUpperCase().contains("CP")) {
+      title = "Verifikasi Izin TL/CP";
+    } else if (type.toUpperCase().contains("LUAR") ||
+        type.toUpperCase().contains("RADIUS")) {
+      title = "Verifikasi Absen Luar Kantor";
+    }
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -166,21 +180,9 @@ class CutiDetailVerificationPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Image Preview (Only for TL/CP/Luar Radius)
-                          if ((data['type'] ?? "").toUpperCase().contains(
-                                "TERLAMBAT",
-                              ) ||
-                              (data['type'] ?? "").toUpperCase().contains(
-                                "PULANG",
-                              ) ||
-                              (data['type'] ?? "").toUpperCase().contains(
-                                "RADIUS",
-                              ) ||
-                              (data['type'] ?? "").toUpperCase().contains(
-                                "TL",
-                              ) ||
-                              (data['type'] ?? "").toUpperCase().contains(
-                                "CP",
-                              )) ...[
+                          if (fileBukti.isNotEmpty &&
+                              fileBukti != "-" &&
+                              fileBukti.toLowerCase() != "null") ...[
                             _buildEvidenceImage(
                               fileBukti,
                               data['startDate'] ?? "-",
@@ -263,7 +265,7 @@ class CutiDetailVerificationPage extends StatelessWidget {
                   top: 20,
                   left: 24,
                   right: 24,
-                  child: _buildAppBar(context),
+                  child: _buildAppBar(context, title),
                 ),
               ],
             ),
@@ -273,7 +275,7 @@ class CutiDetailVerificationPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
+  Widget _buildAppBar(BuildContext context, String title) {
     return SizedBox(
       width: double.infinity,
       child: GestureDetector(
@@ -284,14 +286,14 @@ class CutiDetailVerificationPage extends StatelessWidget {
           blur: 30,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.arrow_back, color: Colors.white),
-                SizedBox(width: 16),
+                const Icon(Icons.arrow_back, color: Colors.white),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    "Verifikasi Cuti Bawahan",
-                    style: TextStyle(
+                    title,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -308,49 +310,75 @@ class CutiDetailVerificationPage extends StatelessWidget {
   }
 
   Widget _buildEvidenceImage(String? imageUrl, String date) {
+    final String baseUrl = sl<ApiClient>().dio.options.baseUrl;
+    String fullImageUrl = imageUrl ?? "";
+
+    if (fullImageUrl.isNotEmpty &&
+        fullImageUrl != '-' &&
+        !fullImageUrl.startsWith('http')) {
+      final cleanPath = fullImageUrl.startsWith('/')
+          ? fullImageUrl.substring(1)
+          : fullImageUrl;
+      fullImageUrl = '$baseUrl/$cleanPath';
+    }
+
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          height: 220,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.grey.shade300, width: 1),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: (imageUrl != null && imageUrl.isNotEmpty && imageUrl != '-')
-                ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (ctx, err, stack) => const Column(
+        AspectRatio(
+          aspectRatio:
+              1, // Change to Square to better accommodate portrait photos
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50, // Light background for letterboxing
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: (fullImageUrl.isNotEmpty && fullImageUrl != '-')
+                  ? Image.network(
+                      fullImageUrl,
+                      fit: BoxFit.contain, // Ensure full photo is visible
+                      errorBuilder: (ctx, err, stack) => const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.broken_image,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            "Gagal memuat gambar",
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                        Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 40,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 8),
                         Text(
-                          "Gagal memuat gambar",
-                          style: TextStyle(color: Colors.grey),
+                          "Tidak ada bukti lampiran",
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),
-                  )
-                : const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 50,
-                        color: Colors.grey,
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        "Tidak ada bukti lampiran",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
+            ),
           ),
         ),
         const SizedBox(height: 12),
