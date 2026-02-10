@@ -17,62 +17,103 @@ class GetTodayAttendanceUseCase extends UseCase<AttendanceModel?, void> {
   Future<Stream<AttendanceModel?>> buildUseCaseStream(void params) async {
     final controller = StreamController<AttendanceModel?>();
     try {
+      final now = DateTime.now();
+
       // 1. Try Get Today Status from API
       try {
         final result = await _attendanceRepository.getTodayStatus();
-        if (result['data'] != null) {
-          final Map<String, dynamic> attendanceData = Map<String, dynamic>.from(
-            result['data'],
-          );
+        if (result['data'] != null || result['jadwal'] != null) {
+          final Map<String, dynamic> attendanceData = result['data'] != null
+              ? Map<String, dynamic>.from(result['data'])
+              : <String, dynamic>{};
+
           if (result['jadwal'] != null) {
             attendanceData['jadwal'] = result['jadwal'];
           }
-          controller.add(AttendanceModel.fromJson(attendanceData));
-          controller.close();
-          return controller.stream;
+
+          final model = AttendanceModel.fromJson(attendanceData);
+
+          // Only return today's model if it has a check-in or it's genuinely for today
+          if (model.checkInTime != '-' ||
+              (model.date != null &&
+                  _isSameDay(DateTime.parse(model.date!), now))) {
+            controller.add(model);
+            controller.close();
+            return controller.stream;
+          }
         }
       } catch (e) {
         // Continue to fallback
       }
 
-      // 2. Fallback: Check History for Today
+      // 2. Advanced Fallback: Check History for Today OR Yesterday (within 6 hours)
       try {
         final history = await _attendanceRepository.getHistory();
-        final now = DateTime.now();
-        final todayItem = history.firstWhere(
-          (element) {
-            if (element.date == null) return false;
-            try {
-              final date = DateTime.parse(element.date!);
-              return date.year == now.year &&
-                  date.month == now.month &&
-                  date.day == now.day;
-            } catch (_) {
-              return false;
-            }
-          },
-          orElse: () =>
-              const AttendanceModel(status: 'UNKNOWN', checkInTime: '-'),
-        );
 
-        if (todayItem.status != 'UNKNOWN') {
-          controller.add(todayItem);
+        // Find Today's Item
+        final todayItem = history.where((element) {
+          if (element.date == null) return false;
+          try {
+            final date = DateTime.parse(element.date!);
+            return _isSameDay(date, now);
+          } catch (_) {
+            return false;
+          }
+        }).toList();
+
+        if (todayItem.isNotEmpty) {
+          controller.add(todayItem.first);
           controller.close();
           return controller.stream;
         }
+
+        // If NO record for today, check Yesterday
+        final yesterday = now.subtract(const Duration(days: 1));
+        final yesterdayItem = history.where((element) {
+          if (element.date == null) return false;
+          try {
+            final date = DateTime.parse(element.date!);
+            return _isSameDay(date, yesterday);
+          } catch (_) {
+            return false;
+          }
+        }).toList();
+
+        if (yesterdayItem.isNotEmpty) {
+          final item = yesterdayItem.first;
+          if (item.checkOutTime != null && item.checkOutTime != '-') {
+            try {
+              // Parse checkout time from yesterday's record
+              final parts = item.checkOutTime!.split(':');
+              final hour = int.parse(parts[0]);
+              final minute = int.parse(parts[1]);
+              final checkoutDateTime = DateTime(
+                yesterday.year,
+                yesterday.month,
+                yesterday.day,
+                hour,
+                minute,
+              );
+
+              // If now is within 6 hours of yesterday's checkout, show it
+              if (now.difference(checkoutDateTime).inHours < 6) {
+                controller.add(item);
+                controller.close();
+                return controller.stream;
+              }
+            } catch (_) {}
+          }
+        }
       } catch (_) {}
 
-      // 3. Fallback: Check Correction
+      // 3. Fallback: Check Correction for Today
       try {
         final corrections = await _koreksiRepository.getHistory();
-        final now = DateTime.now();
         final todayCorrection = corrections.firstWhere((element) {
           try {
             if (element.tanggalKehadiran == null) return false;
             final date = DateTime.parse(element.tanggalKehadiran!);
-            return date.year == now.year &&
-                date.month == now.month &&
-                date.day == now.day;
+            return _isSameDay(date, now);
           } catch (_) {
             return false;
           }
@@ -98,5 +139,9 @@ class GetTodayAttendanceUseCase extends UseCase<AttendanceModel?, void> {
       controller.close();
     }
     return controller.stream;
+  }
+
+  bool _isSameDay(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
   }
 }

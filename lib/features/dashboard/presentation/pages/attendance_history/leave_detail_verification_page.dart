@@ -16,8 +16,13 @@ class LeaveDetailVerificationPage extends StatelessWidget {
     // Determine Title
     String title = "Verifikasi Izin Bawahan";
     String type = data['type'] ?? "";
-    if (type.contains("Terlambat") || type.contains("Cepat Pulang")) {
+    if (type.contains("Terlambat") ||
+        type.contains("Cepat Pulang") ||
+        type.contains("TL") ||
+        type.contains("CP")) {
       title = "Verifikasi Izin TL/CP";
+    } else if (type.contains("LUAR") || type.contains("RADIUS")) {
+      title = "Verifikasi Absen Luar Kantor";
     }
 
     return Scaffold(
@@ -103,7 +108,12 @@ class LeaveDetailVerificationPage extends StatelessWidget {
 
                           _buildLabel("Jenis Izin"),
                           const SizedBox(height: 8),
-                          _buildTextField(data['type'] ?? "-"),
+                          _buildTextField(
+                            (data['type'] ?? "-").toUpperCase().replaceAll(
+                              '_',
+                              ' ',
+                            ),
+                          ),
                           const SizedBox(height: 16),
 
                           _buildLabel("Alasan"),

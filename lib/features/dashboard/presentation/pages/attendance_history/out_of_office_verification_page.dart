@@ -324,7 +324,7 @@ class _OutOfOfficeVerificationPageState
                 children: [
                   _buildDetailRow(
                     "Jenis",
-                    (item.jenisIzin ?? "-").toUpperCase(),
+                    (item.jenisIzin ?? "-").toUpperCase().replaceAll('_', ' '),
                   ),
                   const SizedBox(height: 8),
                   _buildDetailRow("Tanggal", item.tanggalMulai ?? "-"),

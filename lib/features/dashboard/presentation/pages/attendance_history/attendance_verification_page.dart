@@ -204,11 +204,12 @@ class _AttendanceVerificationPageState
 
           // "TERLAMBAT", "PULANG_CEPAT", "KOREKSI"
           bool isAttendanceIssue =
-              jenis.contains('TERLAMBAT') ||
-              jenis.contains('TELAT') ||
-              jenis.contains('CEPAT') ||
-              jenis.contains('PULANG') ||
-              jenis == 'KOREKSI';
+              (jenis.contains('TERLAMBAT') ||
+                  jenis.contains('TELAT') ||
+                  jenis.contains('CEPAT') ||
+                  jenis.contains('PULANG') ||
+                  jenis == 'KOREKSI') &&
+              !(jenis.contains('LUAR') || jenis.contains('RADIUS'));
 
           if (!isAttendanceIssue) return false;
 
@@ -327,7 +328,7 @@ class _AttendanceVerificationPageState
                 children: [
                   _buildDetailRow(
                     "Jenis",
-                    (item.jenisIzin ?? "-").toUpperCase(),
+                    (item.jenisIzin ?? "-").toUpperCase().replaceAll('_', ' '),
                   ),
                   const SizedBox(height: 8),
                   _buildDetailRow("Tanggal", item.tanggalMulai ?? "-"),

@@ -235,7 +235,11 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
     // Determine display title
     String title = (item.jenisIzin ?? "-").toUpperCase();
     if ((item.tipe ?? "").toUpperCase() == 'KOREKSI') {
-      title = "TL/CP";
+      if (title.contains('LUAR') || title.contains('RADIUS')) {
+        title = "LUAR RADIUS";
+      } else {
+        title = "TL/CP";
+      }
     }
 
     // final bool isAtasan =

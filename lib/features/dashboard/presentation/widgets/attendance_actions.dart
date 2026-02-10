@@ -92,47 +92,88 @@ class _AttendanceActionsState extends State<AttendanceActions> {
           _clockOutTime = hasCheckOut ? data.checkOutTime! : "-- : --";
           _isAttendanceComplete = hasCheckOut;
 
-          _isLate =
-              data.status.toUpperCase().contains('TERLAMBAT') ||
-              data.status.toUpperCase().contains('TELAT') ||
-              data.status.toUpperCase().contains('DL') ||
-              data.checkInTime.toUpperCase().contains(
-                'DINAS LUAR',
-              ); // DL is considered "Non-Standard/Late" for UI
+          // DECOUPLED VALIDATION LOGIC
+          // 1. Check In Validation (Recalculated from times for persistence)
+          _isLate = false;
+          if (hasCheckIn) {
+            final String sTimeStr =
+                (data.scheduledCheckInTime != null &&
+                    data.scheduledCheckInTime != '-')
+                ? data.scheduledCheckInTime!
+                : "08:00"; // Robust default fallback
 
-          // Validation Logic with Fallback
-          double? currentDistance = data.distance;
-
-          // Attempt Fallback Calculation if Distance is Null
-          if (currentDistance == null && data.checkInCoordinates != null) {
             try {
-              final parts = data.checkInCoordinates!.split(',');
-              if (parts.length == 2) {
-                final lat = double.parse(parts[0].trim());
-                final long = double.parse(parts[1].trim());
+              final partsS = sTimeStr.split(':');
+              final sHour = int.parse(partsS[0]);
+              final sMinute = int.parse(partsS[1]);
 
-                currentDistance = LocationService().calculateDistance(
-                  lat,
-                  long,
-                  LocationService.officeLat,
-                  LocationService.officeLong,
-                );
+              final partsR = data.checkInTime.split(':');
+              final rHour = int.parse(partsR[0]);
+              final rMinute = int.parse(partsR[1]);
+
+              if (rHour > sHour || (rHour == sHour && rMinute > sMinute)) {
+                _isLate = true;
               }
-            } catch (e) {
-              debugPrint("Error parsing coordinates for validation: $e");
+            } catch (_) {
+              _isLate =
+                  data.status.toUpperCase().contains('TERLAMBAT') ||
+                  data.status.toUpperCase().contains('TELAT');
             }
           }
 
-          final bool isLuarRadius =
-              data.status.toUpperCase().contains('LUAR') ||
-              data.status.toUpperCase().contains('DL') ||
-              (currentDistance != null &&
-                  currentDistance > LocationService.radiusInMeters);
+          // Check In Location: Use coordinates if available for persistence
+          double? checkInDist = data.distance; // Fallback
+          if (data.checkInCoordinates != null) {
+            try {
+              final parts = data.checkInCoordinates!.split(',');
+              final lat = double.parse(parts[0].trim());
+              final long = double.parse(parts[1].trim());
+              checkInDist = LocationService().calculateDistance(
+                lat,
+                long,
+                LocationService.officeLat,
+                LocationService.officeLong,
+              );
+            } catch (_) {}
+          }
+          _checkInLocationValid = (checkInDist != null)
+              ? checkInDist <= LocationService.radiusInMeters
+              : true;
 
-          _checkInLocationValid = !isLuarRadius;
-
+          // 2. Check Out Validation
           if (hasCheckOut) {
-            _checkOutLocationValid = !isLuarRadius;
+            // Recalculate Early Leave from times for persistence
+            _isEarlyLeave = false;
+            final String sTimeStr =
+                (data.scheduledCheckOutTime != null &&
+                    data.scheduledCheckOutTime != '-')
+                ? data.scheduledCheckOutTime!
+                : "16:00"; // Robust default fallback
+
+            try {
+              final partsS = sTimeStr.split(':');
+              final sHour = int.parse(partsS[0]);
+              final sMinute = int.parse(partsS[1]);
+
+              final partsR = data.checkOutTime!.split(':');
+              final rHour = int.parse(partsR[0]);
+              final rMinute = int.parse(partsR[1]);
+
+              if (rHour < sHour || (rHour == sHour && rMinute < sMinute)) {
+                _isEarlyLeave = true;
+              }
+            } catch (_) {
+              _isEarlyLeave =
+                  data.status.toUpperCase().contains('CEPAT') ||
+                  data.status.toUpperCase().contains('AWAL');
+            }
+
+            // Check Out Location: If current status is LUAR RADIUS and it's Checked Out,
+            // then Check Out might be the one that's invalid.
+            final bool isLuar =
+                data.status.toUpperCase().contains('LUAR') ||
+                data.status.toUpperCase().contains('DL');
+            _checkOutLocationValid = !isLuar;
           }
         });
       }
@@ -661,13 +702,140 @@ class _AttendanceActionsState extends State<AttendanceActions> {
         }
       } else {
         // Check Out (possibly Early)
+        // 1. Check for Early Leave Confirmation
+        if (widget.initialData?.scheduledCheckOutTime != null) {
+          try {
+            final parts = widget.initialData!.scheduledCheckOutTime!.split(':');
+            final sHour = int.parse(parts[0]);
+            final sMinute = int.parse(parts[1]);
+            final sTime = DateTime(
+              now.year,
+              now.month,
+              now.day,
+              sHour,
+              sMinute,
+            );
+
+            if (now.isBefore(sTime)) {
+              if (!mounted) {
+                setState(() => _isLoading = false);
+                return;
+              }
+              final bool? confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => Dialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.orange,
+                            size: 48,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          "Konfirmasi Pulang Cepat",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                            fontFamily: 'Inter',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Saat ini belum memasuki jam pulang. Apakah Anda yakin ingin pulang cepat?",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black54,
+                            height: 1.5,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Batal",
+                                  style: TextStyle(
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: const Text(
+                                  "Ya, Pulang",
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+              if (confirm != true) {
+                setState(() => _isLoading = false);
+                return;
+              }
+            }
+          } catch (_) {}
+        }
+
         result = await widget.onCheckOut(lat, long, reason: actionReason);
       }
 
       if (!mounted) return;
 
       final String actionLabel = isCheckingIn ? "Masuk" : "Pulang";
-      final now = DateTime.now();
       final String formattedTime =
           "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
@@ -679,21 +847,34 @@ class _AttendanceActionsState extends State<AttendanceActions> {
       bool currentActionIsLate = false;
       bool currentActionIsEarly = false;
 
-      // Handle "Late" Logic (Server Response Priority + Fallback)
+      // Handle "Late" Logic (Server Response Priority + Robust Fallback)
       if (isCheckingIn) {
         currentActionIsLate =
             statusNote.toLowerCase().contains('telat') ||
             statusNote.toLowerCase().contains('terlambat');
 
-        // If we sent a late reason, we can assume it's late even if server text varies,
-        // but let's trust server status first.
-        if (actionReason != null && !currentActionIsLate) {
-          // If we forced a reason, it's effectively Late/Correction
-          // statusNote might be "HADIR" but we submitted a correction.
+        // Fallback: Check if current time is after scheduled time
+        if (!currentActionIsLate &&
+            widget.initialData?.scheduledCheckInTime != null) {
+          try {
+            final parts = widget.initialData!.scheduledCheckInTime!.split(':');
+            final sHour = int.parse(parts[0]);
+            final sMinute = int.parse(parts[1]);
+            final sTime = DateTime(
+              now.year,
+              now.month,
+              now.day,
+              sHour,
+              sMinute,
+            );
+            if (now.isAfter(sTime)) {
+              currentActionIsLate = true;
+            }
+          } catch (_) {}
         }
 
         if (currentActionIsLate) {
-          statusColor = Colors.red;
+          statusColor = Colors.redAccent;
         }
       }
 
@@ -993,15 +1174,17 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                   "Jam Masuk :",
                   _clockInTime,
                   isActive: _clockInTime != "-- : --",
-                  isTimeValid: !_isLate,
-                  isLocationValid: _checkInLocationValid,
+                  // Blue check only if BOTH on-time AND within radius
+                  isTimeValid: !_isLate && _checkInLocationValid,
+                  isLocationValid: _checkInLocationValid && !_isLate,
                 ),
                 _buildStatusColumn(
                   "Jam Keluar :",
                   _clockOutTime,
                   isActive: _clockOutTime != "-- : --",
-                  isTimeValid: !_isEarlyLeave,
-                  isLocationValid: _checkOutLocationValid,
+                  // Blue check only if BOTH on-time AND within radius
+                  isTimeValid: !_isEarlyLeave && _checkOutLocationValid,
+                  isLocationValid: _checkOutLocationValid && !_isEarlyLeave,
                 ),
               ],
             ),
@@ -1035,7 +1218,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
       locIcon = Icons.check_circle_outline_rounded;
       locColor = Colors.white;
     } else {
-      // Active State: Green/Red Validation
+      // Active State: Blue/Red Validation
       timeIcon = isTimeValid
           ? Icons.check_circle_rounded
           : Icons.cancel_rounded;
