@@ -208,7 +208,11 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 
       _getTodayUseCase.execute(_ValidatorObserver(this, completer));
 
-      return completer.future;
+      final result = await completer.future;
+      debugPrint(
+        "VALIDATION RESULT: $result (Today Attendance Model: ${state.todayAttendance?.scheduledCheckInTime})",
+      );
+      return result;
     } catch (e) {
       debugPrint("Validation Error: $e");
       return false;
@@ -375,7 +379,32 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   }
 
   void onCheckInOutSuccess(AttendanceModel result) {
-    state = state.copyWith(isLoading: false, todayAttendance: result);
+    // PRESERVE DATA: If the new result (usually a checkout) is missing check-in data
+    // that we already have in the current state, merge them.
+    AttendanceModel finalizedResult = result;
+
+    if (state.todayAttendance != null) {
+      final current = state.todayAttendance!;
+      final bool newHasCheckIn =
+          result.checkInTime != '-' && result.checkInTime.isNotEmpty;
+      final bool oldHasCheckIn =
+          current.checkInTime != '-' && current.checkInTime.isNotEmpty;
+
+      if (!newHasCheckIn && oldHasCheckIn) {
+        finalizedResult = result.copyWith(
+          checkInTime: current.checkInTime,
+          checkInCoordinates: current.checkInCoordinates,
+          scheduledCheckInTime:
+              result.scheduledCheckInTime ?? current.scheduledCheckInTime,
+          scheduledCheckOutTime:
+              result.scheduledCheckOutTime ?? current.scheduledCheckOutTime,
+          // Distance might also be useful to keep if checkout one is null
+          distance: result.distance ?? current.distance,
+        );
+      }
+    }
+
+    state = state.copyWith(isLoading: false, todayAttendance: finalizedResult);
     _getHistory();
   }
 
