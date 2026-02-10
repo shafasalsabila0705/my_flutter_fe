@@ -2,6 +2,9 @@ import 'package:equatable/equatable.dart';
 
 class AttendanceModel extends Equatable {
   final String status;
+  final String? statusKeluar;
+  final String? statusLokasiMasuk;
+  final String? statusLokasiPulang;
   final String checkInTime;
   final String? checkOutTime;
   final double? distance;
@@ -12,6 +15,9 @@ class AttendanceModel extends Equatable {
 
   const AttendanceModel({
     required this.status,
+    this.statusKeluar,
+    this.statusLokasiMasuk,
+    this.statusLokasiPulang,
     required this.checkInTime,
     this.checkOutTime,
     this.distance,
@@ -24,6 +30,23 @@ class AttendanceModel extends Equatable {
   factory AttendanceModel.fromJson(Map<String, dynamic> json) {
     return AttendanceModel(
       status: json['status'] ?? json['status_masuk'] ?? 'UNKNOWN',
+      statusKeluar: json['status_pulang'] ?? json['status_keluar'],
+      statusLokasiMasuk:
+          json['status_lokasi_masuk'] ??
+          json['status_lokasi_checkin'] ??
+          json['status_radius_masuk'] ??
+          json['lokasi_masuk'] ??
+          json['radius_masuk'],
+      statusLokasiPulang:
+          json['status_lokasi_pulang'] ??
+          json['status_lokasi_keluar'] ??
+          json['status_lokasi_checkout'] ??
+          json['status_radius_pulang'] ??
+          json['status_radius_keluar'] ??
+          json['lokasi_pulang'] ??
+          json['lokasi_keluar'] ??
+          json['radius_pulang'] ??
+          json['radius_keluar'],
       // Check for multiple possible keys for time
       checkInTime:
           json['jam_masuk_real'] ?? json['waktu_masuk'] ?? json['time'] ?? '-',
@@ -52,6 +75,9 @@ class AttendanceModel extends Equatable {
   Map<String, dynamic> toJson() {
     return {
       'status': status,
+      'status_pulang': statusKeluar,
+      'status_lokasi_masuk': statusLokasiMasuk,
+      'status_lokasi_pulang': statusLokasiPulang,
       'jam_masuk_real': checkInTime,
       'jam_pulang_real': checkOutTime,
       'jarak': distance,
@@ -64,6 +90,9 @@ class AttendanceModel extends Equatable {
 
   AttendanceModel copyWith({
     String? status,
+    String? statusKeluar,
+    String? statusLokasiMasuk,
+    String? statusLokasiPulang,
     String? checkInTime,
     String? checkOutTime,
     double? distance,
@@ -74,6 +103,9 @@ class AttendanceModel extends Equatable {
   }) {
     return AttendanceModel(
       status: status ?? this.status,
+      statusKeluar: statusKeluar ?? this.statusKeluar,
+      statusLokasiMasuk: statusLokasiMasuk ?? this.statusLokasiMasuk,
+      statusLokasiPulang: statusLokasiPulang ?? this.statusLokasiPulang,
       checkInTime: checkInTime ?? this.checkInTime,
       checkOutTime: checkOutTime ?? this.checkOutTime,
       distance: distance ?? this.distance,
@@ -88,9 +120,13 @@ class AttendanceModel extends Equatable {
   @override
   List<Object?> get props => [
     status,
+    statusKeluar,
+    statusLokasiMasuk,
+    statusLokasiPulang,
     checkInTime,
     checkOutTime,
     distance,
+    checkInCoordinates,
     date,
     scheduledCheckInTime,
     scheduledCheckOutTime,

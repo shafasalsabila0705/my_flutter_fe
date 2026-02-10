@@ -96,84 +96,131 @@ class _AttendanceActionsState extends State<AttendanceActions> {
           // 1. Check In Validation (Recalculated from times for persistence)
           _isLate = false;
           if (hasCheckIn) {
-            final String sTimeStr =
-                (data.scheduledCheckInTime != null &&
-                    data.scheduledCheckInTime != '-')
-                ? data.scheduledCheckInTime!
-                : "08:00"; // Robust default fallback
+            final String checkInStatus = data.status.toUpperCase();
+            // Prioritize Database Status String
+            if (checkInStatus.contains('TERLAMBAT') ||
+                checkInStatus.contains('TELAT')) {
+              _isLate = true;
+            } else if (checkInStatus.contains('HADIR')) {
+              _isLate = false;
+            } else {
+              // Fallback to time calculation
+              final String sTimeStr =
+                  (data.scheduledCheckInTime != null &&
+                      data.scheduledCheckInTime != '-')
+                  ? data.scheduledCheckInTime!
+                  : "08:00"; // Robust default fallback
 
-            try {
-              final partsS = sTimeStr.split(':');
-              final sHour = int.parse(partsS[0]);
-              final sMinute = int.parse(partsS[1]);
+              try {
+                final partsS = sTimeStr.split(':');
+                final sHour = int.parse(partsS[0]);
+                final sMinute = int.parse(partsS[1]);
 
-              final partsR = data.checkInTime.split(':');
-              final rHour = int.parse(partsR[0]);
-              final rMinute = int.parse(partsR[1]);
+                final partsR = data.checkInTime.split(':');
+                final rHour = int.parse(partsR[0]);
+                final rMinute = int.parse(partsR[1]);
 
-              if (rHour > sHour || (rHour == sHour && rMinute > sMinute)) {
-                _isLate = true;
-              }
-            } catch (_) {
-              _isLate =
-                  data.status.toUpperCase().contains('TERLAMBAT') ||
-                  data.status.toUpperCase().contains('TELAT');
+                if (rHour > sHour || (rHour == sHour && rMinute > sMinute)) {
+                  _isLate = true;
+                }
+              } catch (_) {}
             }
           }
 
-          // Check In Location: Use coordinates if available for persistence
-          double? checkInDist = data.distance; // Fallback
-          if (data.checkInCoordinates != null) {
-            try {
-              final parts = data.checkInCoordinates!.split(',');
-              final lat = double.parse(parts[0].trim());
-              final long = double.parse(parts[1].trim());
-              checkInDist = LocationService().calculateDistance(
-                lat,
-                long,
-                LocationService.officeLat,
-                LocationService.officeLong,
-              );
-            } catch (_) {}
+          // Check In Location: Prioritize Database 'status_lokasi_masuk'
+          if (data.statusLokasiMasuk != null &&
+              data.statusLokasiMasuk!.isNotEmpty) {
+            final String locMasuk = data.statusLokasiMasuk!.toUpperCase();
+            _checkInLocationValid =
+                locMasuk.contains('VALID') && !locMasuk.contains('INVALID');
+          } else {
+            // Fallback to coordinates calculation first, then check main status
+            double? checkInDist = data.distance;
+            if (data.checkInCoordinates != null) {
+              try {
+                final parts = data.checkInCoordinates!.split(',');
+                final lat = double.parse(parts[0].trim());
+                final long = double.parse(parts[1].trim());
+                checkInDist = LocationService().calculateDistance(
+                  lat,
+                  long,
+                  LocationService.officeLat,
+                  LocationService.officeLong,
+                );
+              } catch (_) {}
+            }
+
+            final bool distValid = (checkInDist != null)
+                ? checkInDist <= LocationService.radiusInMeters
+                : true;
+
+            final String checkInStatusUpper = data.status.toUpperCase();
+            final bool statusIndicatesLuar =
+                checkInStatusUpper.contains('LUAR') ||
+                checkInStatusUpper.contains('DL') ||
+                checkInStatusUpper.contains('INVALID');
+
+            _checkInLocationValid = distValid && !statusIndicatesLuar;
           }
-          _checkInLocationValid = (checkInDist != null)
-              ? checkInDist <= LocationService.radiusInMeters
-              : true;
 
           // 2. Check Out Validation
           if (hasCheckOut) {
-            // Recalculate Early Leave from times for persistence
-            _isEarlyLeave = false;
-            final String sTimeStr =
-                (data.scheduledCheckOutTime != null &&
-                    data.scheduledCheckOutTime != '-')
-                ? data.scheduledCheckOutTime!
-                : "16:00"; // Robust default fallback
+            final String checkOutStatus =
+                (data.statusKeluar != null && data.statusKeluar!.isNotEmpty)
+                ? data.statusKeluar!.toUpperCase()
+                : data.status.toUpperCase();
 
-            try {
-              final partsS = sTimeStr.split(':');
-              final sHour = int.parse(partsS[0]);
-              final sMinute = int.parse(partsS[1]);
+            // Prioritize Database Status String
+            if (checkOutStatus.contains('CEPAT') ||
+                checkOutStatus.contains('AWAL')) {
+              _isEarlyLeave = true;
+            } else if (checkOutStatus.contains('PULANG')) {
+              _isEarlyLeave = false;
+            } else {
+              // Fallback to time calculation
+              final String sTimeStr =
+                  (data.scheduledCheckOutTime != null &&
+                      data.scheduledCheckOutTime != '-')
+                  ? data.scheduledCheckOutTime!
+                  : "16:00"; // Robust default fallback
 
-              final partsR = data.checkOutTime!.split(':');
-              final rHour = int.parse(partsR[0]);
-              final rMinute = int.parse(partsR[1]);
+              try {
+                final partsS = sTimeStr.split(':');
+                final sHour = int.parse(partsS[0]);
+                final sMinute = int.parse(partsS[1]);
 
-              if (rHour < sHour || (rHour == sHour && rMinute < sMinute)) {
-                _isEarlyLeave = true;
-              }
-            } catch (_) {
-              _isEarlyLeave =
-                  data.status.toUpperCase().contains('CEPAT') ||
-                  data.status.toUpperCase().contains('AWAL');
+                final partsR = data.checkOutTime!.split(':');
+                final rHour = int.parse(partsR[0]);
+                final rMinute = int.parse(partsR[1]);
+
+                if (rHour < sHour || (rHour == sHour && rMinute < sMinute)) {
+                  _isEarlyLeave = true;
+                } else {
+                  _isEarlyLeave = false;
+                }
+              } catch (_) {}
             }
 
-            // Check Out Location: If current status is LUAR RADIUS and it's Checked Out,
-            // then Check Out might be the one that's invalid.
-            final bool isLuar =
-                data.status.toUpperCase().contains('LUAR') ||
-                data.status.toUpperCase().contains('DL');
-            _checkOutLocationValid = !isLuar;
+            // debugPrint("DEBUG: statusLokasiPulang = ${data.statusLokasiPulang}");
+            // debugPrint("DEBUG: checkOutStatus = $checkOutStatus");
+
+            // Check Out Location: Prioritize Database 'status_lokasi_pulang'
+            if (data.statusLokasiPulang != null &&
+                data.statusLokasiPulang!.isNotEmpty) {
+              final String locPulang = data.statusLokasiPulang!.toUpperCase();
+              _checkOutLocationValid =
+                  locPulang.contains('VALID') && !locPulang.contains('INVALID');
+            } else {
+              // Fallback to previous logic:
+              // If current status (masuk or keluar) is LUAR RADIUS and it's Checked Out,
+              // then Check Out might be the one that's invalid.
+              final String checkOutStatusUpper = checkOutStatus.toUpperCase();
+              final bool isLuar =
+                  checkOutStatusUpper.contains('LUAR') ||
+                  checkOutStatusUpper.contains('DL') ||
+                  checkOutStatusUpper.contains('INVALID');
+              _checkOutLocationValid = !isLuar;
+            }
           }
         });
       }
@@ -1174,17 +1221,15 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                   "Jam Masuk :",
                   _clockInTime,
                   isActive: _clockInTime != "-- : --",
-                  // Blue check only if BOTH on-time AND within radius
-                  isTimeValid: !_isLate && _checkInLocationValid,
-                  isLocationValid: _checkInLocationValid && !_isLate,
+                  isTimeValid: !_isLate,
+                  isLocationValid: _checkInLocationValid,
                 ),
                 _buildStatusColumn(
                   "Jam Keluar :",
                   _clockOutTime,
                   isActive: _clockOutTime != "-- : --",
-                  // Blue check only if BOTH on-time AND within radius
-                  isTimeValid: !_isEarlyLeave && _checkOutLocationValid,
-                  isLocationValid: _checkOutLocationValid && !_isEarlyLeave,
+                  isTimeValid: !_isEarlyLeave,
+                  isLocationValid: _checkOutLocationValid,
                 ),
               ],
             ),

@@ -209,9 +209,13 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
       _getTodayUseCase.execute(_ValidatorObserver(this, completer));
 
       final result = await completer.future;
+      debugPrint("--- SCHEDULE VALIDATION ---");
+      debugPrint("VALIDATION RESULT: $result");
+      debugPrint("CURRENT STATE ATTENDANCE: ${state.todayAttendance}");
       debugPrint(
-        "VALIDATION RESULT: $result (Today Attendance Model: ${state.todayAttendance?.scheduledCheckInTime})",
+        "SCHEDULE IN STATE: ${state.todayAttendance?.scheduledCheckInTime}",
       );
+      debugPrint("----------------------------");
       return result;
     } catch (e) {
       debugPrint("Validation Error: $e");
@@ -379,6 +383,10 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   }
 
   void onCheckInOutSuccess(AttendanceModel result) {
+    debugPrint("--- CHECK-IN/OUT SUCCESS RAW RESULT ---");
+    debugPrint("RESULT JSON: ${result.toJson()}");
+    debugPrint("----------------------------------------");
+
     // PRESERVE DATA: If the new result (usually a checkout) is missing check-in data
     // that we already have in the current state, merge them.
     AttendanceModel finalizedResult = result;
@@ -394,12 +402,18 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         finalizedResult = result.copyWith(
           checkInTime: current.checkInTime,
           checkInCoordinates: current.checkInCoordinates,
+          status: current.status, // Preserve check-in status
           scheduledCheckInTime:
               result.scheduledCheckInTime ?? current.scheduledCheckInTime,
           scheduledCheckOutTime:
               result.scheduledCheckOutTime ?? current.scheduledCheckOutTime,
           // Distance might also be useful to keep if checkout one is null
           distance: result.distance ?? current.distance,
+          statusKeluar: result.statusKeluar ?? current.statusKeluar,
+          statusLokasiMasuk:
+              result.statusLokasiMasuk ?? current.statusLokasiMasuk,
+          statusLokasiPulang:
+              result.statusLokasiPulang ?? current.statusLokasiPulang,
         );
       }
     }
@@ -577,9 +591,14 @@ class _ValidatorObserver extends Observer<AttendanceModel?> {
           response.scheduledCheckInTime != '-' &&
           response.scheduledCheckInTime!.isNotEmpty);
 
-      debugPrint(
-        "VALIDATOR: Schedule Code=${response.scheduledCheckInTime}, HasSchedule=$hasSchedule",
-      );
+      debugPrint("--- VALIDATOR DEBUG ---");
+      debugPrint("JSON: ${response.toJson()}");
+      debugPrint("Status: ${response.status}");
+      debugPrint("Schedule Masuk: ${response.scheduledCheckInTime}");
+      debugPrint("Schedule Pulang: ${response.scheduledCheckOutTime}");
+      debugPrint("Date: ${response.date}");
+      debugPrint("HasSchedule Logic: $hasSchedule");
+      debugPrint("-----------------------");
 
       if (!_completer.isCompleted) {
         _completer.complete(hasSchedule);

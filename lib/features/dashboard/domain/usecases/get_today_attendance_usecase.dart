@@ -31,12 +31,24 @@ class GetTodayAttendanceUseCase extends UseCase<AttendanceModel?, void> {
             attendanceData['jadwal'] = result['jadwal'];
           }
 
-          final model = AttendanceModel.fromJson(attendanceData);
+          AttendanceModel model = AttendanceModel.fromJson(attendanceData);
 
-          // Only return today's model if it has a check-in or it's genuinely for today
-          if (model.checkInTime != '-' ||
-              (model.date != null &&
-                  _isSameDay(DateTime.parse(model.date!), now))) {
+          // ENHANCEMENT: Populate date if missing but schedule/data exists
+          if (model.date == null || model.date!.isEmpty) {
+            model = model.copyWith(date: now.toIso8601String().split('T')[0]);
+          }
+
+          // Relaxed Today Check:
+          // 1. Has check-in time, OR
+          // 2. Has scheduled check-in time (from API), OR
+          // 3. Date matches today
+          final bool hasCheckIn = model.checkInTime != '-';
+          final bool hasSchedule =
+              model.scheduledCheckInTime != null &&
+              model.scheduledCheckInTime != '-';
+          final bool isToday = _isSameDay(DateTime.parse(model.date!), now);
+
+          if (hasCheckIn || hasSchedule || isToday) {
             controller.add(model);
             controller.close();
             return controller.stream;
