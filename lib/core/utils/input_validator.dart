@@ -14,8 +14,8 @@ class InputValidator {
     if (value == null || value.isEmpty) {
       return 'Password tidak boleh kosong';
     }
-    if (value.length < 6) {
-      return 'Password harus minimal 6 karakter';
+    if (value.length < 8) {
+      return 'Password harus minimal 8 karakter';
     }
     return null;
   }

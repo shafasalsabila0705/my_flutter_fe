@@ -27,6 +27,13 @@ class AttendanceActions extends StatefulWidget {
     String? reason,
   })
   onCheckOut;
+  final Future<AttendanceModel> Function(
+    File photo,
+    double lat,
+    double long, {
+    String? reason,
+  })?
+  onCheckOutWithPhoto;
   final bool isOutsideRadius;
   final Future<bool> Function() onValidateSchedule; // Added
 
@@ -37,6 +44,7 @@ class AttendanceActions extends StatefulWidget {
     required this.onValidateSchedule, // Added
     this.initialData,
     this.onCheckInWithPhoto,
+    this.onCheckOutWithPhoto,
     this.isOutsideRadius = false,
   });
 
@@ -143,14 +151,14 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                 checkInDist = LocationService().calculateDistance(
                   lat,
                   long,
-                  LocationService.officeLat,
-                  LocationService.officeLong,
+                  LocationService().officeLat,
+                  LocationService().officeLong,
                 );
               } catch (_) {}
             }
 
             final bool distValid = (checkInDist != null)
-                ? checkInDist <= LocationService.radiusInMeters
+                ? checkInDist <= LocationService().radiusInMeters
                 : true;
 
             final String checkInStatusUpper = data.status.toUpperCase();
@@ -425,108 +433,9 @@ class _AttendanceActionsState extends State<AttendanceActions> {
     // AND Late Check In Reason collection.
 
     String? actionReason;
-    // now is already defined above
 
     if (isCheckingIn) {
-      // CHECK LATE
-      bool isLateNow = false;
-      // 1. Check Schedule
-      if (widget.initialData?.scheduledCheckInTime != null &&
-          widget.initialData!.scheduledCheckInTime != '-' &&
-          widget.initialData!.scheduledCheckInTime!.contains(':')) {
-        try {
-          final parts = widget.initialData!.scheduledCheckInTime!.split(':');
-          final scheduledHour = int.parse(parts[0]);
-          final scheduledMinute = int.parse(parts[1]);
-          final scheduledTime = DateTime(
-            now.year,
-            now.month,
-            now.day,
-            scheduledHour,
-            scheduledMinute,
-          );
-
-          // Tolerance? e.g. 1 minute?
-          if (now.isAfter(scheduledTime)) {
-            isLateNow = true;
-          }
-        } catch (_) {}
-      } else {
-        // Fallback: Default 08:00? User didn't specify.
-        // Assuming 08:00 as commonly seen in code/logs.
-        if (now.hour > 8 || (now.hour == 8 && now.minute > 0)) {
-          isLateNow = true;
-        }
-      }
-
-      if (isLateNow && !widget.isOutsideRadius) {
-        // Only ask if NOT outside radius (Outside Radius is already a correction flow with its own reason)
-        if (!mounted) return;
-        final String? input = await showDialog<String>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            String tempReason = "";
-            return AlertDialog(
-              title: Row(
-                children: const [
-                  Icon(Icons.access_time_filled, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text("Terlambat"),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Anda melakukan absen setelah jam masuk. Mohon sertakan alasan keterlambatan.",
-                    style: TextStyle(fontSize: 14, color: Colors.black54),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: "Contoh: Ban bocor, Macet, dll.",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                    ),
-                    onChanged: (value) => tempReason = value,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text("Batal"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (tempReason.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Alasan wajib diisi!")),
-                      );
-                      return;
-                    }
-                    Navigator.pop(context, tempReason);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF29B6F6),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text("Lanjut"),
-                ),
-              ],
-            );
-          },
-        );
-
-        if (input == null) return; // Cancelled
-        actionReason = input;
-      }
+      // Late reason collection removed as per requirement. Justification handled in History.
     } else {
       // CHECK EARLY LEAVE
       bool isEarly = false;
@@ -559,10 +468,9 @@ class _AttendanceActionsState extends State<AttendanceActions> {
 
       if (isEarly && !widget.isOutsideRadius) {
         if (!mounted) return;
-        final String? input = await showDialog<String>(
+        final bool? confirmed = await showDialog<bool>(
           context: context,
           builder: (context) {
-            String tempReason = "";
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -589,7 +497,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      "Pulang Awal",
+                      "Konfirmasi Pulang Cepat",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -597,42 +505,28 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      "Anda pulang sebelum jadwal. Mohon sertakan alasan.",
+                      "Yakin anda ingin pulang cepat?",
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      decoration: const InputDecoration(
-                        hintText: "Alasan pulang awal...",
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (v) => tempReason = v,
                     ),
                     const SizedBox(height: 24),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context, null),
+                            onPressed: () => Navigator.pop(context, false),
                             child: const Text("Batal"),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () {
-                              if (tempReason.trim().isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Alasan wajib diisi!"),
-                                  ),
-                                );
-                                return;
-                              }
-                              Navigator.pop(context, tempReason);
-                            },
-                            child: const Text("Pulang"),
+                            onPressed: () => Navigator.pop(context, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF29B6F6),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text("Ya, Pulang"),
                           ),
                         ),
                       ],
@@ -644,8 +538,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
           },
         );
 
-        if (input == null) return; // Cancelled
-        actionReason = input;
+        if (confirmed != true) return; // Cancelled or false
       }
     }
 
@@ -664,7 +557,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
 
       if (isCheckingIn) {
         if (widget.isOutsideRadius && widget.onCheckInWithPhoto != null) {
-          // Open Camera logic
+          // ... (existing check-in with photo logic)
           if (!mounted) return;
 
           final File? photo = await Navigator.push(
@@ -675,12 +568,10 @@ class _AttendanceActionsState extends State<AttendanceActions> {
           );
 
           if (photo == null) {
-            // User cancelled camera
             setState(() => _isLoading = false);
             return;
           }
 
-          // Reason for Outside Radius
           String? reason;
           if (mounted) {
             reason = await showDialog<String>(
@@ -703,10 +594,6 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                         decoration: const InputDecoration(
                           hintText: "Contoh: Rapat di Kantor Gubernur",
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
                         ),
                         onChanged: (value) => inputReason = value,
                       ),
@@ -743,140 +630,88 @@ class _AttendanceActionsState extends State<AttendanceActions> {
             reason: reason,
           );
         } else {
-          // Standard Check In (possibly Late)
           result = await widget.onCheckIn(lat, long, reason: actionReason);
         }
       } else {
-        // Check Out (possibly Early)
-        // 1. Check for Early Leave Confirmation
-        if (widget.initialData?.scheduledCheckOutTime != null) {
-          try {
-            final parts = widget.initialData!.scheduledCheckOutTime!.split(':');
-            final sHour = int.parse(parts[0]);
-            final sMinute = int.parse(parts[1]);
-            final sTime = DateTime(
-              now.year,
-              now.month,
-              now.day,
-              sHour,
-              sMinute,
+        // CHECK OUT
+        if (widget.isOutsideRadius && widget.onCheckOutWithPhoto != null) {
+          // Outside Radius Check Out with Photo
+          if (!mounted) return;
+
+          final File? photo = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CameraPage(position: position),
+            ),
+          );
+
+          if (photo == null) {
+            setState(() => _isLoading = false);
+            return;
+          }
+
+          // Reason for Outside Radius Check Out
+          String? reason;
+          if (mounted) {
+            reason = await showDialog<String>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) {
+                String inputReason = "";
+                return AlertDialog(
+                  title: const Text("Alasan Pulang Dinas Luar"),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "Anda berada di luar radius kantor saat pulang. Masukkan catatan/alasan Anda.",
+                        style: TextStyle(fontSize: 14, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          hintText: "Contoh: Selesai Rapat di Kantor Gubernur",
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => inputReason = value,
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, null),
+                      child: const Text("Batal"),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, inputReason),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF29B6F6),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("Kirim Absen"),
+                    ),
+                  ],
+                );
+              },
             );
 
-            if (now.isBefore(sTime)) {
-              if (!mounted) {
-                setState(() => _isLoading = false);
-                return;
-              }
-              final bool? confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => Dialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.orange,
-                            size: 48,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          "Konfirmasi Pulang Cepat",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                            fontFamily: 'Inter',
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          "Saat ini belum memasuki jam pulang. Apakah Anda yakin ingin pulang cepat?",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black54,
-                            height: 1.5,
-                            fontFamily: 'Inter',
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text(
-                                  "Batal",
-                                  style: TextStyle(
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: const Text(
-                                  "Ya, Pulang",
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-              if (confirm != true) {
-                setState(() => _isLoading = false);
-                return;
-              }
+            if (reason == null) {
+              setState(() => _isLoading = false);
+              return;
             }
-          } catch (_) {}
-        }
+          }
 
-        result = await widget.onCheckOut(lat, long, reason: actionReason);
+          result = await widget.onCheckOutWithPhoto!(
+            photo,
+            lat,
+            long,
+            reason: reason,
+          );
+        } else {
+          // Standard Check Out
+          result = await widget.onCheckOut(lat, long, reason: actionReason);
+        }
       }
 
       if (!mounted) return;
@@ -932,10 +767,6 @@ class _AttendanceActionsState extends State<AttendanceActions> {
             statusNote.toLowerCase().contains('awal');
 
         currentActionIsEarly = isEarlyLeaveServer;
-
-        if (actionReason != null) {
-          currentActionIsEarly = true; // We know it's early
-        }
 
         if (currentActionIsEarly) {
           statusColor = Colors.orange;
@@ -1035,7 +866,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                 (!statusNote.toUpperCase().contains('LUAR') &&
                     !statusNote.toUpperCase().contains('DL')) &&
                 (result.distance == null ||
-                    result.distance! <= LocationService.radiusInMeters);
+                    result.distance! <= LocationService().radiusInMeters);
 
             // 1. Notifikasi Absen Masuk Berhasil & Jadwal Reminder
             // Moved to DashboardNotifier to follow Architecture Guide
@@ -1054,8 +885,8 @@ class _AttendanceActionsState extends State<AttendanceActions> {
                 dist = LocationService().calculateDistance(
                   lat,
                   long,
-                  LocationService.officeLat,
-                  LocationService.officeLong,
+                  LocationService().officeLat,
+                  LocationService().officeLong,
                 );
               } catch (_) {}
             }
@@ -1063,7 +894,7 @@ class _AttendanceActionsState extends State<AttendanceActions> {
             final bool isLuar =
                 statusNote.toUpperCase().contains('LUAR') ||
                 statusNote.toUpperCase().contains('DL') ||
-                (dist != null && dist > LocationService.radiusInMeters);
+                (dist != null && dist > LocationService().radiusInMeters);
 
             _checkOutLocationValid = !isLuar;
 

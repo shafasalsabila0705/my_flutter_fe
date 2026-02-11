@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../../../../../core/constants/colors.dart'; // Added Import
 
@@ -8,9 +9,11 @@ import '../../../../../../injection_container.dart';
 import '../../../../auth/domain/repositories/auth_repository.dart';
 import '../../../../auth/domain/entities/user.dart';
 import '../../../domain/repositories/leave_repository.dart';
+import '../../../domain/entities/perizinan.dart';
 
 class CutiApplicationPage extends StatefulWidget {
-  const CutiApplicationPage({super.key});
+  final Perizinan? initialData;
+  const CutiApplicationPage({super.key, this.initialData});
 
   @override
   State<CutiApplicationPage> createState() => _CutiApplicationPageState();
@@ -36,6 +39,12 @@ class _CutiApplicationPageState extends State<CutiApplicationPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialData != null) {
+      final data = widget.initialData!;
+      _selectedCutiType = data.jenisIzin;
+      _startTimeController.text = data.tanggalMulai ?? "";
+      _endTimeController.text = data.tanggalSelesai ?? "";
+    }
     _fetchProfile();
   }
 
@@ -121,7 +130,7 @@ class _CutiApplicationPageState extends State<CutiApplicationPage> {
                       SizedBox(
                         height:
                             MediaQuery.of(context).size.height *
-                            0.52, // Lowered slightly
+                            0.05, // Balanced compression
                       ),
 
                       // White Container (Content)
@@ -130,13 +139,13 @@ class _CutiApplicationPageState extends State<CutiApplicationPage> {
                         constraints: BoxConstraints(
                           minHeight:
                               MediaQuery.of(context).size.height *
-                              0.48, // Fills remaining space
+                              0.95, // Fills to the bottom
                         ),
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(30),
-                            topRight: Radius.circular(30),
+                            topLeft: Radius.circular(40),
+                            topRight: Radius.circular(40),
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -147,15 +156,34 @@ class _CutiApplicationPageState extends State<CutiApplicationPage> {
                           ],
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            24,
-                            32,
-                            24,
-                            40,
-                          ), // Adjusted Padding
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Handle Bar
+                              Center(
+                                child: Container(
+                                  width: 40,
+                                  height: 4,
+                                  margin: const EdgeInsets.only(bottom: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 40,
+                              ), // Spacing from top handle
+                              Center(
+                                child: Lottie.asset(
+                                  'assets/animations/Sandy Loading.json',
+                                  width: 220,
+                                  height: 220,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(height: 30), // Balanced spacing
                               _buildLabel("Atasan"),
                               _buildTextField(
                                 controller: _atasanController,
@@ -459,13 +487,26 @@ class _CutiApplicationPageState extends State<CutiApplicationPage> {
       // 2. Call API
       // Dates are already in yyyy-MM-dd format
 
-      await sl<LeaveRepository>().applyLeave(
-        tipe: "CUTI", // Set to CUTI as requested
-        jenisIzin: _selectedCutiType!,
-        tanggalMulai: _startTimeController.text,
-        tanggalSelesai: _endTimeController.text,
-        keterangan: "-",
-      );
+      if (widget.initialData != null) {
+        // Edit Mode
+        await sl<LeaveRepository>().updateLeave(
+          id: widget.initialData!.id!,
+          tipe: "CUTI",
+          jenisIzin: _selectedCutiType!, // Changed from _selectedLeaveType
+          tanggalMulai: _startTimeController.text,
+          tanggalSelesai: _endTimeController.text,
+          keterangan: "-",
+        );
+      } else {
+        // New Mode
+        await sl<LeaveRepository>().applyLeave(
+          tipe: "CUTI", // Uppercase to match backend
+          jenisIzin: _selectedCutiType!, // Changed from _selectedLeaveType
+          tanggalMulai: _startTimeController.text,
+          tanggalSelesai: _endTimeController.text,
+          keterangan: "-",
+        );
+      }
 
       if (mounted) {
         _showSuccessDialog(context);

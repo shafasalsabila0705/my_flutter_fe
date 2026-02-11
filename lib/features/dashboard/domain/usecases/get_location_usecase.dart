@@ -28,10 +28,10 @@ class GetLocationUseCase extends UseCase<LocationResult, void> {
       final distance = _locationService.calculateDistance(
         position.latitude,
         position.longitude,
-        LocationService.officeLat,
-        LocationService.officeLong,
+        _locationService.officeLat,
+        _locationService.officeLong,
       );
-      final isWithin = distance <= LocationService.radiusInMeters;
+      final isWithin = distance <= _locationService.radiusInMeters;
 
       controller.add(
         LocationResult(

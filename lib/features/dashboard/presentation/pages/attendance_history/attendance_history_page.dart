@@ -370,9 +370,15 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
                         // Content List or Calendar
                         Expanded(
-                          child: _selectedTab == 0
-                              ? _buildMyHistoryView()
-                              : _buildEmployeeHistoryView(),
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              await _fetchHistory();
+                              _fetchTeamRecap();
+                            },
+                            child: _selectedTab == 0
+                                ? _buildMyHistoryView()
+                                : _buildEmployeeHistoryView(),
+                          ),
                         ),
                       ],
                     ),
@@ -463,6 +469,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
         int permission = stats.permission;
         int leave = stats.leave;
         int unknown = stats.unknown;
+        int notPresent = stats.notPresent;
 
         final details = data.details ?? [];
 
@@ -475,6 +482,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
         final izinColor = const Color(0xFF00BCD4); // Cyan
         final cutiColor = const Color(0xFF9C27B0); // Purple
         final unknownColor = const Color(0xFFF44336); // Red
+        final notPresentColor = const Color(0xFF9E9E9E); // Grey
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -507,6 +515,10 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     ChartData(color: izinColor, value: permission.toDouble()),
                     ChartData(color: cutiColor, value: leave.toDouble()),
                     ChartData(color: unknownColor, value: unknown.toDouble()),
+                    ChartData(
+                      color: notPresentColor,
+                      value: notPresent.toDouble(),
+                    ),
                   ]),
                   child: Center(
                     child: Container(
@@ -593,6 +605,19 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                       unknownColor,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTeamStatCard(
+                      "Belum Absen",
+                      "$notPresent",
+                      notPresentColor,
+                    ),
+                  ),
+                  const Spacer(), // Keeps layout consistent
                 ],
               ),
 

@@ -121,7 +121,14 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
                     child: Column(
                       children: [
                         const SizedBox(height: 20),
-                        Expanded(child: _buildHistoryList()),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              _refreshHistory();
+                            },
+                            child: _buildHistoryList(),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -209,6 +216,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         final history = snapshot.data!;
 
         return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
           itemCount: history.length,
           itemBuilder: (context, index) {
@@ -348,9 +356,104 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
               ],
             ),
           ),
+
+          // Actions: ONLY for "MENUNGGU" and specific types (BIMTEK, TUBEL, DINAS LUAR)
+          if (status == "MENUNGGU" &&
+              [
+                "BIMTEK",
+                "TUBEL",
+                "DINAS LUAR",
+              ].contains((item.jenisIzin ?? "").toUpperCase())) ...[
+            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _handleEdit(item),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text("Edit"),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryBlue,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () => _handleCancel(item),
+                    icon: const Icon(Icons.cancel_outlined, size: 18),
+                    label: const Text("Batalkan"),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _handleCancel(Perizinan item) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Konfirmasi"),
+        content: const Text("Yakin ingin membatalkan pengajuan ini?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Tidak"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text(
+              "Ya, Batalkan",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        if ((item.tipe ?? "").toUpperCase() == 'KOREKSI') {
+          await sl<AttendanceRepository>().cancelCorrection(item.id!);
+        } else {
+          await sl<LeaveRepository>().cancelLeave(item.id!);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Pengajuan berhasil dibatalkan")),
+          );
+          _refreshHistory();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Gagal membatalkan: $e"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleEdit(Perizinan item) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LeaveApplicationPage(initialData: item),
+      ),
+    );
+
+    if (result == true) {
+      _refreshHistory();
+    }
   }
 
   Widget _buildCompactRow(IconData icon, String label, String value) {

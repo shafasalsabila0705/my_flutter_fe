@@ -1,5 +1,6 @@
 import '../../domain/repositories/attendance_repository.dart';
 import '../../domain/entities/perizinan.dart';
+import '../../domain/entities/location_check.dart';
 import '../datasources/attendance_remote_data_source.dart';
 import '../models/attendance_model.dart';
 import 'dart:io';
@@ -76,6 +77,25 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   }
 
   @override
+  Future<AttendanceModel> checkOutWithPhoto(
+    double lat,
+    double long,
+    dynamic photo, {
+    String? reason,
+  }) async {
+    try {
+      return await remoteDataSource.checkOutWithPhoto(
+        lat,
+        long,
+        photo,
+        reason: reason,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
   Future<List<AttendanceModel>> getHistory() async {
     try {
       return await remoteDataSource.getHistory();
@@ -119,6 +139,43 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   }) async {
     try {
       await remoteDataSource.submitCorrection(
+        tanggal: tanggal,
+        alasan: alasan,
+        bukti: bukti,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<LocationCheck> checkLocation(double lat, double long) async {
+    try {
+      return await remoteDataSource.checkLocation(lat, long);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> cancelCorrection(String id) async {
+    try {
+      await remoteDataSource.cancelCorrection(id);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateCorrection({
+    required String id,
+    required String tanggal,
+    required String alasan,
+    File? bukti,
+  }) async {
+    try {
+      await remoteDataSource.updateCorrection(
+        id: id,
         tanggal: tanggal,
         alasan: alasan,
         bukti: bukti,

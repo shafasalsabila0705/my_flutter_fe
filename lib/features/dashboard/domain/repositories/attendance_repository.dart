@@ -1,5 +1,6 @@
 import '../../data/models/attendance_model.dart'; // Ideally entity
 import '../entities/perizinan.dart';
+import '../entities/location_check.dart';
 import 'dart:io';
 
 abstract class AttendanceRepository {
@@ -11,6 +12,12 @@ abstract class AttendanceRepository {
     String? reason,
   }); // using dynamic for File/XFile
   Future<AttendanceModel> checkOut(double lat, double long, {String? reason});
+  Future<AttendanceModel> checkOutWithPhoto(
+    double lat,
+    double long,
+    dynamic photo, {
+    String? reason,
+  });
   Future<List<AttendanceModel>> getHistory();
   Future<AttendanceRecapModel> getRecap(String month, String year);
   Future<AttendanceRecapModel> getTeamRecap(String month, String year);
@@ -22,4 +29,12 @@ abstract class AttendanceRepository {
     required String alasan,
     File? bukti,
   });
+  Future<void> cancelCorrection(String id);
+  Future<void> updateCorrection({
+    required String id,
+    required String tanggal,
+    required String alasan,
+    File? bukti,
+  });
+  Future<LocationCheck> checkLocation(double lat, double long);
 }

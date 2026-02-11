@@ -4,11 +4,12 @@ import 'package:flutter_application_1/features/dashboard/domain/entities/attenda
 class AttendanceStatisticsHelper {
   static AttendanceStatsSummary calculate(AttendanceRecapModel data) {
     int present = data.present;
-    int lateNoPermit = data.late; // Default 'late' to no permit
-    int latePermitted = 0; // New category
+    int lateNoPermit = data.late;
+    int latePermitted = data.lateAllowed;
     int permission = data.permission;
     int leave = data.leave;
     int unknown = data.alpha;
+    int notPresent = data.notPresent; // Added
 
     final details = data.details ?? [];
     final hasDetails = details.isNotEmpty;
@@ -25,6 +26,7 @@ class AttendanceStatisticsHelper {
         permission = 0;
         leave = 0;
         unknown = 0;
+        notPresent = 0;
       }
 
       if (isSummaryEmpty) {
@@ -67,6 +69,7 @@ class AttendanceStatisticsHelper {
               permission += parse(stats['i'] ?? stats['izin']);
               leave += parse(stats['c'] ?? stats['cuti']);
               unknown += parse(stats['tk'] ?? stats['alfa']);
+              notPresent += parse(stats['not_present'] ?? stats['belum_absen']);
             } else {
               // Daily Log Format
               final status =
@@ -112,7 +115,13 @@ class AttendanceStatisticsHelper {
 
     // Calculate Total
     final total =
-        present + lateNoPermit + latePermitted + permission + leave + unknown;
+        present +
+        lateNoPermit +
+        latePermitted +
+        permission +
+        leave +
+        unknown +
+        notPresent;
     final presentPercentage = total > 0 ? ((present / total) * 100).toInt() : 0;
 
     return AttendanceStatsSummary(
@@ -122,6 +131,7 @@ class AttendanceStatisticsHelper {
       permission: permission,
       leave: leave,
       unknown: unknown,
+      notPresent: notPresent,
       total: total,
       presentPercentage: presentPercentage,
     );

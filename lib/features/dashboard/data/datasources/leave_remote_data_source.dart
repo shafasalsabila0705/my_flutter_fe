@@ -18,6 +18,16 @@ abstract class LeaveRemoteDataSource {
   Future<List<PerizinanModel>>
   getSubordinateRequests(); // /api/perizinan/bawahan
   Future<void> approveRequest(int id, String status); // /api/perizinan/approval
+  Future<void> cancelLeave(String id); // /api/perizinan/{id}
+  Future<void> updateLeave({
+    required String id,
+    required String tipe,
+    required String jenisIzin,
+    required String tanggalMulai,
+    required String tanggalSelesai,
+    required String keterangan,
+    File? fileBukti,
+  });
 }
 
 class LeaveRemoteDataSourceImpl implements LeaveRemoteDataSource {
@@ -130,6 +140,62 @@ class LeaveRemoteDataSourceImpl implements LeaveRemoteDataSource {
       );
     } catch (e) {
       throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> cancelLeave(String id) async {
+    try {
+      final response = await apiClient.delete('/api/perizinan/cuti/$id');
+      if (response.statusCode != 200) {
+        throw ServerException(response.statusMessage ?? 'Gagal membatalkan');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateLeave({
+    required String id,
+    required String tipe,
+    required String jenisIzin,
+    required String tanggalMulai,
+    required String tanggalSelesai,
+    required String keterangan,
+    File? fileBukti,
+  }) async {
+    try {
+      dynamic requestData;
+      if (fileBukti != null) {
+        requestData = FormData.fromMap({
+          'tipe': tipe,
+          'jenis_izin': jenisIzin,
+          'tanggal_mulai': tanggalMulai,
+          'tanggal_selesai': tanggalSelesai,
+          'keterangan': keterangan,
+          'file_bukti': await MultipartFile.fromFile(fileBukti.path),
+        });
+      } else {
+        requestData = {
+          'tipe': tipe,
+          'jenis_izin': jenisIzin,
+          'tanggal_mulai': tanggalMulai,
+          'tanggal_selesai': tanggalSelesai,
+          'keterangan': keterangan,
+        };
+      }
+
+      final response = await apiClient.put(
+        '/api/perizinan/cuti/$id',
+        data: requestData,
+      );
+
+      if (response.statusCode != 200) {
+        throw ServerException(response.statusMessage ?? 'Gagal mengupdate');
+      }
+    } on DioException catch (e) {
+      throw ServerException(e.message ?? 'Gagal mengupdate');
     }
   }
 }

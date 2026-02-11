@@ -8,12 +8,30 @@ class LocationService {
   factory LocationService() => _instance;
   LocationService._internal();
 
-  /// Constants for Geofencing
-  // Placeholder coordinates (Please update with real office coordinates)
-  // Example: Diskominfo Padang (approximate)
-  static const double officeLat = -0.924855; // Replace with actual
-  static const double officeLong = 100.362624; // Replace with actual
-  static const double radiusInMeters = 50.0;
+  /// Dynamic Configuration for Geofencing
+  double _officeLat = -0.924855;
+  double _officeLong = 100.362624;
+  double _radiusInMeters = 50.0;
+
+  double get officeLat => _officeLat;
+  double get officeLong => _officeLong;
+  double get radiusInMeters => _radiusInMeters;
+
+  /// Update office location dynamically from database/API
+  void updateConfig({
+    required double lat,
+    required double long,
+    double? radius,
+  }) {
+    _officeLat = lat;
+    _officeLong = long;
+    if (radius != null && radius > 0) {
+      _radiusInMeters = radius;
+    }
+    debugPrint(
+      "📍 LocationService: Updated office to ($lat, $long) with radius $_radiusInMeters m",
+    );
+  }
 
   /// Check if location services are enabled and permissions are granted
   Future<bool> _handlePermission() async {

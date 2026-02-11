@@ -20,15 +20,31 @@ class DashboardPage extends ConsumerStatefulWidget {
   ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends ConsumerState<DashboardPage> {
+class _DashboardPageState extends ConsumerState<DashboardPage>
+    with WidgetsBindingObserver {
   final LayerLink _layerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(dashboardProvider.notifier).loadDashboardData();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint("🔄 Dashboard: App resumed, refreshing data...");
+      ref.read(dashboardProvider.notifier).loadDashboardData();
+    }
   }
 
   @override
@@ -228,6 +244,36 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                                             return completer
                                                                 .future;
                                                           },
+                                                      onCheckOutWithPhoto:
+                                                          (
+                                                            photo,
+                                                            lat,
+                                                            long, {
+                                                            reason,
+                                                          }) {
+                                                            final completer =
+                                                                Completer<
+                                                                  AttendanceModel
+                                                                >();
+                                                            notifier.checkOut(
+                                                              lat,
+                                                              long,
+                                                              photo: photo,
+                                                              reason: reason,
+                                                              onSuccess: (m) =>
+                                                                  completer
+                                                                      .complete(
+                                                                        m,
+                                                                      ),
+                                                              onError: (e) =>
+                                                                  completer
+                                                                      .completeError(
+                                                                        e,
+                                                                      ),
+                                                            );
+                                                            return completer
+                                                                .future;
+                                                          },
                                                       onCheckOut:
                                                           (
                                                             lat,
@@ -241,6 +287,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                                             notifier.checkOut(
                                                               lat,
                                                               long,
+                                                              reason: reason,
                                                               onSuccess: (m) =>
                                                                   completer
                                                                       .complete(

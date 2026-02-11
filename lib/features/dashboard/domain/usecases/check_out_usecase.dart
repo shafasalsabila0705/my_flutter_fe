@@ -16,11 +16,21 @@ class CheckOutUseCase extends UseCase<AttendanceModel, CheckOutParams> {
     try {
       if (params == null) throw Exception("Params null");
 
-      final result = await _repository.checkOut(
-        params.lat,
-        params.long,
-        reason: params.reason,
-      );
+      final AttendanceModel result;
+      if (params.photo != null) {
+        result = await _repository.checkOutWithPhoto(
+          params.lat,
+          params.long,
+          params.photo!,
+          reason: params.reason,
+        );
+      } else {
+        result = await _repository.checkOut(
+          params.lat,
+          params.long,
+          reason: params.reason,
+        );
+      }
       controller.add(result);
       controller.close();
     } catch (e) {
@@ -35,6 +45,12 @@ class CheckOutParams {
   final double lat;
   final double long;
   final String? reason;
+  final dynamic photo;
 
-  CheckOutParams({required this.lat, required this.long, this.reason});
+  CheckOutParams({
+    required this.lat,
+    required this.long,
+    this.reason,
+    this.photo,
+  });
 }

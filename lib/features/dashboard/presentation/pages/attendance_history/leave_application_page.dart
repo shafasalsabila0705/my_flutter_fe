@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../../../../../core/constants/colors.dart'; // Added Import
 
@@ -8,9 +9,12 @@ import '../../../../../../injection_container.dart';
 import '../../../../auth/domain/repositories/auth_repository.dart';
 import '../../../../auth/domain/entities/user.dart';
 import '../../../domain/repositories/leave_repository.dart';
+import '../../../domain/entities/perizinan.dart'; // Added import for Perizinan
+import '../../../domain/repositories/attendance_repository.dart'; // Added import for AttendanceRepository
 
 class LeaveApplicationPage extends StatefulWidget {
-  const LeaveApplicationPage({super.key});
+  final Perizinan? initialData;
+  const LeaveApplicationPage({super.key, this.initialData});
 
   @override
   State<LeaveApplicationPage> createState() => _LeaveApplicationPageState();
@@ -24,11 +28,22 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
   bool _isLoading = false; // Added state
 
   String? _selectedLeaveType;
-  final List<String> _leaveTypes = ["DINAS LUAR", "BIMTEK", "TUBEL"];
+  final List<String> _leaveTypes = [
+    "DINAS LUAR",
+    "BIMTEK",
+    "TUBEL",
+  ];
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialData != null) {
+      final data = widget.initialData!;
+      _selectedLeaveType = data.jenisIzin;
+      _startTimeController.text = data.tanggalMulai ?? "";
+      _endTimeController.text = data.tanggalSelesai ?? "";
+      // Atasan could be parsed if we had the ID, but for now we keep the selection.
+    }
     _fetchProfile();
   }
 
@@ -116,7 +131,7 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                       SizedBox(
                         height:
                             MediaQuery.of(context).size.height *
-                            0.52, // Lowered slightly
+                            0.05, // Balanced compression
                       ),
 
                       // White Container (Content)
@@ -125,13 +140,13 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                         constraints: BoxConstraints(
                           minHeight:
                               MediaQuery.of(context).size.height *
-                              0.48, // Fills remaining space
+                              0.95, // Fills to the bottom
                         ),
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(30),
-                            topRight: Radius.circular(30),
+                            topLeft: Radius.circular(40),
+                            topRight: Radius.circular(40),
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -142,15 +157,34 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
                           ],
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            24,
-                            32,
-                            24,
-                            40,
-                          ), // Adjusted Padding
+                          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Handle Bar
+                              Center(
+                                child: Container(
+                                  width: 40,
+                                  height: 4,
+                                  margin: const EdgeInsets.only(bottom: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 40,
+                              ), // Spacing from top handle
+                              Center(
+                                child: Lottie.asset(
+                                  'assets/animations/Sandy Loading.json',
+                                  width: 220,
+                                  height: 220,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(height: 30), // Balanced spacing
                               _buildLabel("Atasan"),
                               _buildTextField(
                                 controller: _atasanController,
@@ -457,13 +491,34 @@ class _LeaveApplicationPageState extends State<LeaveApplicationPage> {
 
       // Dates are already in yyyy-MM-dd format from picker
 
-      await sl<LeaveRepository>().applyLeave(
-        tipe: "IZIN", // Uppercase to match backend
-        jenisIzin: _selectedLeaveType!,
-        tanggalMulai: _startTimeController.text,
-        tanggalSelesai: _endTimeController.text,
-        keterangan: "-",
-      );
+      if (widget.initialData != null) {
+        // Edit Mode
+        if ((widget.initialData!.tipe ?? "").toUpperCase() == 'KOREKSI') {
+          await sl<AttendanceRepository>().updateCorrection(
+            id: widget.initialData!.id!,
+            tanggal: _startTimeController.text,
+            alasan: _selectedLeaveType ?? "IZIN",
+          );
+        } else {
+          await sl<LeaveRepository>().updateLeave(
+            id: widget.initialData!.id!,
+            tipe: widget.initialData!.tipe ?? "IZIN",
+            jenisIzin: _selectedLeaveType!,
+            tanggalMulai: _startTimeController.text,
+            tanggalSelesai: _endTimeController.text,
+            keterangan: "-",
+          );
+        }
+      } else {
+        // New Mode
+        await sl<LeaveRepository>().applyLeave(
+          tipe: "IZIN", // Uppercase to match backend
+          jenisIzin: _selectedLeaveType!,
+          tanggalMulai: _startTimeController.text,
+          tanggalSelesai: _endTimeController.text,
+          keterangan: "-",
+        );
+      }
 
       if (mounted) {
         _showSuccessDialog(context);

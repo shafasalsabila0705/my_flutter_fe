@@ -46,6 +46,7 @@ import 'features/dashboard/domain/usecases/check_in_usecase.dart';
 import 'features/dashboard/domain/usecases/check_out_usecase.dart';
 import 'features/auth/domain/usecases/logout/logout_usecase.dart';
 import 'features/dashboard/domain/usecases/get_location_usecase.dart';
+import 'features/dashboard/domain/usecases/check_location_usecase.dart';
 
 final sl = GetIt.instance;
 
@@ -70,6 +71,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => CheckInUseCase(sl()));
   sl.registerLazySingleton(() => CheckOutUseCase(sl()));
   sl.registerLazySingleton(() => GetLocationUseCase(sl()));
+  sl.registerLazySingleton(() => CheckLocationUseCase(sl()));
 
   // Repository
   sl.registerLazySingleton<AuthRepository>(
@@ -129,7 +131,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => LocationService());
 
   // Define Base URLs
-  String baseUrl = 'http://192.168.1.27:3000';
+  String baseUrl = 'http://172.23.14.163:3000';
 
   try {
     if (Platform.isAndroid) {

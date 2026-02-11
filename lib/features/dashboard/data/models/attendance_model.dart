@@ -12,6 +12,9 @@ class AttendanceModel extends Equatable {
   final String? date;
   final String? scheduledCheckInTime;
   final String? scheduledCheckOutTime;
+  final double? officeLat;
+  final double? officeLong;
+  final double? officeRadius;
 
   const AttendanceModel({
     required this.status,
@@ -25,6 +28,9 @@ class AttendanceModel extends Equatable {
     this.date,
     this.scheduledCheckInTime,
     this.scheduledCheckOutTime,
+    this.officeLat,
+    this.officeLong,
+    this.officeRadius,
   });
 
   factory AttendanceModel.fromJson(Map<String, dynamic> json) {
@@ -69,6 +75,15 @@ class AttendanceModel extends Equatable {
           json['shift']?['jam_pulang'] ??
           json['jam_pulang_jadwal'] ??
           json['jam_pulang'],
+      officeLat:
+          (json['lokasi']?['latitude'] as num?)?.toDouble() ??
+          (json['latitude'] as num?)?.toDouble(),
+      officeLong:
+          (json['lokasi']?['longitude'] as num?)?.toDouble() ??
+          (json['longitude'] as num?)?.toDouble(),
+      officeRadius:
+          (json['lokasi']?['radius_meter'] as num?)?.toDouble() ??
+          (json['radius_meter'] as num?)?.toDouble(),
     );
   }
 
@@ -85,6 +100,9 @@ class AttendanceModel extends Equatable {
       'tanggal': date,
       'jam_masuk_jadwal': scheduledCheckInTime,
       'jam_pulang_jadwal': scheduledCheckOutTime,
+      'office_latitude': officeLat,
+      'office_longitude': officeLong,
+      'office_radius': officeRadius,
     };
   }
 
@@ -100,6 +118,9 @@ class AttendanceModel extends Equatable {
     String? date,
     String? scheduledCheckInTime,
     String? scheduledCheckOutTime,
+    double? officeLat,
+    double? officeLong,
+    double? officeRadius,
   }) {
     return AttendanceModel(
       status: status ?? this.status,
@@ -114,6 +135,9 @@ class AttendanceModel extends Equatable {
       scheduledCheckInTime: scheduledCheckInTime ?? this.scheduledCheckInTime,
       scheduledCheckOutTime:
           scheduledCheckOutTime ?? this.scheduledCheckOutTime,
+      officeLat: officeLat ?? this.officeLat,
+      officeLong: officeLong ?? this.officeLong,
+      officeRadius: officeRadius ?? this.officeRadius,
     );
   }
 
@@ -130,6 +154,9 @@ class AttendanceModel extends Equatable {
     date,
     scheduledCheckInTime,
     scheduledCheckOutTime,
+    officeLat,
+    officeLong,
+    officeRadius,
   ];
 }
 
@@ -138,8 +165,10 @@ class AttendanceRecapModel extends Equatable {
   final int late;
   final int permission;
   final int leave;
-  final int alpha; // Added Alpha (TK) field
-  final List<dynamic>? details; // Enable details to capture list
+  final int alpha;
+  final int lateAllowed;
+  final int notPresent; // Added
+  final List<dynamic>? details;
 
   const AttendanceRecapModel({
     required this.present,
@@ -147,19 +176,30 @@ class AttendanceRecapModel extends Equatable {
     required this.permission,
     required this.leave,
     required this.alpha,
+    required this.lateAllowed,
+    required this.notPresent,
     this.details,
   });
+
+  static int _parseInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
 
   factory AttendanceRecapModel.fromJson(Map<String, dynamic> json) {
     // 0. NEW FORMAT: Check for 'bulan_ini' (Summary Object)
     if (json.containsKey('bulan_ini') && json['bulan_ini'] is Map) {
       final summary = json['bulan_ini'];
       return AttendanceRecapModel(
-        present: summary['hadir_tepat_waktu'] ?? 0,
-        late: (summary['tl_cp'] ?? 0) + (summary['tl_cp_diizinkan'] ?? 0),
-        permission: summary['izin'] ?? 0,
-        leave: summary['cuti'] ?? 0,
-        alpha: summary['alfa'] ?? 0,
+        present: _parseInt(summary['hadir_tepat_waktu']),
+        late: _parseInt(summary['tl_cp']),
+        lateAllowed: _parseInt(summary['tl_cp_diizinkan']),
+        permission: _parseInt(summary['izin']),
+        leave: _parseInt(summary['cuti']),
+        alpha: _parseInt(summary['alfa']),
+        notPresent: _parseInt(summary['belum_absen']),
         details:
             json['details'] ??
             json['data'] ??
@@ -230,20 +270,24 @@ class AttendanceRecapModel extends Equatable {
       return AttendanceRecapModel(
         present: p,
         late: l,
+        lateAllowed: 0, // Fallback for list format
         permission: i,
         leave: c,
         alpha: a,
+        notPresent: 0,
         details: list,
       );
     }
 
     // 2. Standard Object Format (Old Endpoint)
     return AttendanceRecapModel(
-      present: json['hadir'] ?? 0,
-      late: json['terlambat'] ?? 0,
-      permission: json['izin'] ?? 0,
-      leave: json['cuti'] ?? 0,
-      alpha: json['alpha'] ?? json['tk'] ?? 0,
+      present: _parseInt(json['hadir']),
+      late: _parseInt(json['terlambat']),
+      lateAllowed: 0,
+      permission: _parseInt(json['izin']),
+      leave: _parseInt(json['cuti']),
+      alpha: _parseInt(json['alpha'] ?? json['tk']),
+      notPresent: _parseInt(json['belum_absen'] ?? json['not_present']),
       details:
           json['details'] ??
           json['detail'] ??
@@ -257,5 +301,14 @@ class AttendanceRecapModel extends Equatable {
   }
 
   @override
-  List<Object?> get props => [present, late, permission, leave, alpha, details];
+  List<Object?> get props => [
+    present,
+    late,
+    lateAllowed,
+    permission,
+    leave,
+    alpha,
+    notPresent,
+    details,
+  ];
 }

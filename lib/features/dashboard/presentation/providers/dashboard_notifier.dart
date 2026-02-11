@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_clean_architecture/flutter_clean_architecture.dart';
+import '../../../../core/services/location_service.dart';
 
 import '../../../../injection_container.dart';
 import '../../../../core/providers/user_provider.dart';
@@ -22,6 +23,8 @@ import '../../domain/usecases/get_today_attendance_usecase.dart';
 import '../../domain/usecases/check_in_usecase.dart';
 import '../../domain/usecases/check_out_usecase.dart';
 import '../../domain/usecases/get_location_usecase.dart';
+import '../../domain/usecases/check_location_usecase.dart';
+import '../../domain/entities/location_check.dart';
 
 // State
 class DashboardState {
@@ -90,6 +93,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   final CheckOutUseCase _checkOutUseCase;
   final GetProfileUseCase _getProfileUseCase;
   final GetLocationUseCase _getLocationUseCase;
+  final CheckLocationUseCase _checkLocationUseCase;
   final LogoutUseCase _logoutUseCase;
   final GetBawahanListUseCase _getBawahanListUseCase; // Added
   final LocalNotificationService _notificationService;
@@ -103,6 +107,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     this._checkOutUseCase,
     this._getProfileUseCase,
     this._getLocationUseCase,
+    this._checkLocationUseCase,
     this._logoutUseCase,
     this._getBawahanListUseCase, // Added
     this._notificationService,
@@ -148,69 +153,6 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   /// Strict Schedule Validation (Hit API directly)
   Future<bool> validateSchedule() async {
     try {
-      // We use the existing usecase but await the result via a Completer or similar if needed.
-      // Since clean architecture UseCases use Observers (Stream/Void), we might need a direct Future call
-      // OR we can trust the `state.todayAttendance` IF we force a refresh first?
-      // BUT user wants "Hit API".
-      // The `GetTodayAttendanceUseCase` returns `Stream<AttendanceModel?>`.
-      // We can wrap it or just use the repository directly if we truly need strict "await".
-      // However, to stick to Clean Arch, let's use the Use Case and wait for the state to update?
-      // No, that's async/reactive.
-      // Better approach for "Blocking Check":
-      // We can reuse `_getTodayStatus()` but we need to know WHEN it finishes.
-      // Simpler: Just check `state.todayAttendance`? NO, user said "Hit API".
-
-      // OPTION: Create a specialized UseCase that returns a Future<bool> or
-      // modify GetTodayAttendanceUseCase to allow awaiting?
-      // Or simply:
-
-      // final result = await _getTodayUseCase.repository.getTodayStatus();
-      // Wait, we shouldn't access repo directly from Notifier usually, but we need a synchronous-like waiting.
-      // Let's look at `GetTodayAttendanceUseCase`.
-
-      // Actually, looking at `GetTodayAttendanceUseCase`, it likely calls `repository.getTodayStatus()`.
-      // Let's see if we can expose a "checkSchedule" method.
-
-      // A quick way for now without breaking architecture too much:
-      // We will perform the check inside Notifier by invoking the repository/usecase
-      // but we need to return the result to the UI.
-
-      // Let's implement a fresh fetch here.
-      // Since we don't have direct access to repo here (it's injected into UseCase),
-      // we might need to add a method to `GetTodayAttendanceUseCase` that returns Future.
-      // OR, we can just assume `loadDashboardData` is called often.
-
-      // User said: "Sistem wajib melakukan hit API ke backend Go".
-      // So let's add `Future<bool> hasSchedule()` to `DashboardNotifier`
-      // which calls a new method or repurposes existing one.
-
-      // To keep it clean, let's look at `_getTodayUseCase`.
-      // If it returns a Stream, we can't easily "await" single result unless we listen.
-
-      // Let's cheat slightly for "Blocking UI Action" by using `state` if it was just refreshed?
-      // No, user wants fresh hit.
-
-      // Correct way: Add `Future<AttendanceModel> fetchToday()` to parameters/interfaces?
-      // Or just add `validateTodaySchedule` to `DashboardNotifier` that manually calls the repo?
-      // But repo is not in Notifier. UseCase is.
-
-      // Let's assume we can add a method to the UseCase or just create a new one.
-      // Or... we can use `_getTodayUseCase.execute` and wait for the observer?
-
-      // Let's try to add a helper in Notifier that effectively does the work.
-      // But we can't access repo.
-
-      // OK, I'll add `Future<bool> checkScheduleExistence()` to the UseCase?
-      // No, UseCase standard is `buildUseCaseStream`.
-
-      // Let's look at `AttendanceRemoteDataSource`. It has `getTodayStatus`.
-      // The `AttendanceRepository` calls this.
-      // The `GetTodayAttendanceUseCase` calls repository.
-
-      // I will add a `Future<bool> validateSchedule()` to `DashboardNotifier`.
-      // Since I can't await the UseCase easily without a Completer...
-      // I will implement a "manual" await using a one-off observer/completer.
-
       final completer = Completer<bool>();
 
       _getTodayUseCase.execute(_ValidatorObserver(this, completer));
@@ -284,22 +226,16 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   void checkOut(
     double lat,
     double long, {
+    dynamic photo,
+    String? reason,
     Function(AttendanceModel)? onSuccess,
     Function(dynamic)? onError,
   }) {
     // 1. Validate Schedule
     final schedule = state.todayAttendance?.scheduledCheckOutTime;
 
-    // If no schedule (e.g. holiday or free), usually we allow checkout if checked in?
-    // But user asked: "kalau pulang, kasi juga batasannya".
-    // Assume if no schedule, we might block or allow.
-    // "kalau dia ga ada jadwal... anda tidak memiliki jadwal hari ini" -> logic for Check In.
-    // Logic for Check Out implies same check?
+    // ... (rest of the schedule validation logic remains same)
     if (schedule == null || schedule == '-') {
-      // If already checked in, maybe we shouldn't block checkout even if no schedule?
-      // But user requirement implies strict schedule.
-      // Let's check logic: if checked in, they must have had a schedule or bypassed it.
-      // If we strictly follow "No schedule = No action".
       onFailure("Tidak ada jadwal pulang hari ini.");
       if (onError != null) onError("Tidak ada jadwal pulang hari ini.");
       return;
@@ -326,7 +262,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     state = state.copyWith(isLoading: true);
     _checkOutUseCase.execute(
       _CheckInOutObserver(this, true, onSuccess, onError),
-      CheckOutParams(lat: lat, long: long),
+      CheckOutParams(lat: lat, long: long, photo: photo, reason: reason),
     );
   }
 
@@ -375,6 +311,16 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     state = state.copyWith(todayAttendance: today);
     _checkLoading();
 
+    // --- SYNC DYNAMIC LOCATION ---
+    if (today != null && today.officeLat != null && today.officeLong != null) {
+      LocationService().updateConfig(
+        lat: today.officeLat!,
+        long: today.officeLong!,
+        radius: today.officeRadius,
+      );
+    }
+    // ----------------------------
+
     // Logic to schedule/cancel reminders
     if (today != null) {}
   }
@@ -389,6 +335,38 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
       isOutsideRadius: !result.isWithinRadius,
       currentLat: result.position.latitude,
       currentLong: result.position.longitude,
+    );
+
+    // --- REAL-TIME SERVER LOCATION CHECK ---
+    _checkLocationUseCase.execute(
+      _LocationCheckObserver(this),
+      CheckLocationParams(
+        lat: result.position.latitude,
+        long: result.position.longitude,
+      ),
+    );
+  }
+
+  void onLocationCheckReceived(LocationCheck check) {
+    final bool isValid = check.statusLokasi.toUpperCase() == 'VALID';
+
+    // 1. Update State with Server's Validation
+    state = state.copyWith(
+      isOutsideRadius: !isValid,
+      currentLocationName: isValid
+          ? check.namaLokasi
+          : state.currentLocationName,
+    );
+
+    // 2. Sync Dynamic Config from the Nearest Office
+    LocationService().updateConfig(
+      lat: check.latitude,
+      long: check.longitude,
+      radius: check.radiusMeter,
+    );
+
+    debugPrint(
+      "✅ Server Location Check: ${check.statusLokasi} | Office: ${check.namaLokasi} | Dist: ${check.jarakTerdekat}m",
     );
   }
 
@@ -590,6 +568,26 @@ class _LocationObserver extends Observer<LocationResult> {
   }
 }
 
+class _LocationCheckObserver extends Observer<LocationCheck> {
+  final DashboardNotifier _notifier;
+  _LocationCheckObserver(this._notifier);
+
+  @override
+  void onNext(LocationCheck? response) {
+    if (response != null) {
+      _notifier.onLocationCheckReceived(response);
+    }
+  }
+
+  @override
+  void onComplete() {}
+
+  @override
+  void onError(e) {
+    debugPrint("⚠️ CheckLocation Error: $e");
+  }
+}
+
 class _LogoutObserver extends Observer<void> {
   final DashboardNotifier _notifier;
   _LogoutObserver(this._notifier);
@@ -680,6 +678,7 @@ final dashboardProvider =
         sl<CheckOutUseCase>(),
         sl<GetProfileUseCase>(),
         sl<GetLocationUseCase>(),
+        sl<CheckLocationUseCase>(),
         sl<LogoutUseCase>(),
         sl<GetBawahanListUseCase>(),
         sl<LocalNotificationService>(),

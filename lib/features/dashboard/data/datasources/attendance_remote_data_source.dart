@@ -6,6 +6,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/attendance_model.dart';
 import '../models/perizinan_model.dart';
+import '../models/location_check_model.dart';
 
 abstract class AttendanceRemoteDataSource {
   Future<AttendanceModel> checkIn(double lat, double long, {String? reason});
@@ -16,6 +17,12 @@ abstract class AttendanceRemoteDataSource {
     String? reason,
   });
   Future<AttendanceModel> checkOut(double lat, double long, {String? reason});
+  Future<AttendanceModel> checkOutWithPhoto(
+    double lat,
+    double long,
+    File photo, {
+    String? reason,
+  });
   Future<List<AttendanceModel>> getHistory(); // /api/kehadiran/riwayat
   Future<AttendanceRecapModel> getRecap(
     String month,
@@ -38,6 +45,14 @@ abstract class AttendanceRemoteDataSource {
     String tipe = 'KOREKSI',
     File? bukti,
   });
+  Future<void> cancelCorrection(String id);
+  Future<void> updateCorrection({
+    required String id,
+    required String tanggal,
+    required String alasan,
+    File? bukti,
+  });
+  Future<LocationCheckModel> checkLocation(double lat, double long);
 }
 
 class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
@@ -148,6 +163,97 @@ class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
               'Error ${e.response?.statusCode}: ${e.response?.statusMessage}';
         } else if (data is String) {
           errorMessage = data;
+        }
+      }
+      throw ServerException(errorMessage);
+    }
+  }
+
+  @override
+  Future<AttendanceModel> checkOutWithPhoto(
+    double lat,
+    double long,
+    File photo, {
+    String? reason,
+  }) async {
+    // 1. Call Regular Check-Out First
+    AttendanceModel? checkOutResult;
+    try {
+      checkOutResult = await checkOut(lat, long);
+    } catch (e) {
+      debugPrint("Regular CheckOut failed during OutsideRadius flow: $e");
+    }
+
+    try {
+      // 2. Compress Image Logic (Max 1MB)
+      File finalPhoto = photo;
+      int sizeInBytes = await finalPhoto.length();
+      int quality = 85;
+
+      while (sizeInBytes > 1024 * 1024 && quality > 10) {
+        final decodedImage = img.decodeImage(await finalPhoto.readAsBytes());
+        if (decodedImage == null) break;
+
+        final compressedBytes = img.encodeJpg(decodedImage, quality: quality);
+
+        final tempDir = await Directory.systemTemp.createTemp();
+        final tempFile = File(
+          '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        await tempFile.writeAsBytes(compressedBytes);
+
+        finalPhoto = tempFile;
+        sizeInBytes = await finalPhoto.length();
+        quality -= 15;
+      }
+
+      String fileName = finalPhoto.path.split('/').last;
+
+      // 3. Prepare FormData for Correction API (Luar Radius)
+      FormData formData = FormData.fromMap({
+        'tanggal_kehadiran': DateTime.now().toIso8601String().split('T')[0],
+        'tipe_koreksi': 'LUAR_RADIUS',
+        'is_lokasi': true,
+        'alasan': reason ?? 'Presensi Pulang Luar Radius (Melalui Aplikasi)',
+        'latitude': lat,
+        'longitude': long,
+        'file_bukti': await MultipartFile.fromFile(
+          finalPhoto.path,
+          filename: fileName,
+        ),
+      });
+
+      // 4. Call Correction Endpoint
+      final response = await apiClient.post(
+        '/api/koreksi/ajukan',
+        data: formData,
+      );
+
+      if (response.statusCode == 200) {
+        if (checkOutResult != null) {
+          return checkOutResult.copyWith(status: 'MENUNGGU VERIFIKASI (DL)');
+        }
+
+        return const AttendanceModel(
+          status: 'MENUNGGU VERIFIKASI',
+          checkInTime: '-',
+          checkOutTime: 'Pending',
+          date: '-',
+        );
+      } else {
+        throw ServerException(
+          response.statusMessage ?? 'Gagal mengajukan presensi pulang',
+        );
+      }
+    } on DioException catch (e) {
+      String errorMessage = 'Terjadi kesalahan saat upload foto pulang';
+      if (e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map) {
+          errorMessage =
+              data['message'] ??
+              data['error'] ??
+              'Error ${e.response?.statusCode}';
         }
       }
       throw ServerException(errorMessage);
@@ -481,6 +587,72 @@ class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
         }
       }
       throw ServerException(errorMessage);
+    }
+  }
+
+  @override
+  Future<LocationCheckModel> checkLocation(double lat, double long) async {
+    try {
+      final response = await apiClient.post(
+        '/api/kehadiran/check-location',
+        data: {'latitude': lat, 'longitude': long},
+      );
+
+      if (response.statusCode == 200) {
+        return LocationCheckModel.fromJson(response.data);
+      } else {
+        throw ServerException(
+          response.statusMessage ?? 'Gagal mengecek lokasi',
+        );
+      }
+    } on DioException catch (e) {
+      throw ServerException(
+        e.response?.data['message'] ?? e.message ?? 'Gagal mengecek lokasi',
+      );
+    }
+  }
+
+  @override
+  Future<void> cancelCorrection(String id) async {
+    try {
+      final response = await apiClient.delete('/api/koreksi/ajukan/$id');
+      if (response.statusCode != 200) {
+        throw ServerException(response.statusMessage ?? 'Gagal membatalkan');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateCorrection({
+    required String id,
+    required String tanggal,
+    required String alasan,
+    File? bukti,
+  }) async {
+    try {
+      dynamic requestData;
+      if (bukti != null) {
+        requestData = FormData.fromMap({
+          'tanggal_kehadiran': tanggal,
+          'alasan': alasan,
+          'file_bukti': await MultipartFile.fromFile(bukti.path),
+        });
+      } else {
+        requestData = {'tanggal_kehadiran': tanggal, 'alasan': alasan};
+      }
+
+      final response = await apiClient.put(
+        '/api/koreksi/ajukan/$id',
+        data: requestData,
+      );
+
+      if (response.statusCode != 200) {
+        throw ServerException(response.statusMessage ?? 'Gagal mengupdate');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
     }
   }
 }

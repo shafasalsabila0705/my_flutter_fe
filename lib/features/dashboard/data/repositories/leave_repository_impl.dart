@@ -58,4 +58,38 @@ class LeaveRepositoryImpl implements LeaveRepository {
       throw ServerException(e.toString());
     }
   }
+
+  @override
+  Future<void> cancelLeave(String id) async {
+    try {
+      await remoteDataSource.cancelLeave(id);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateLeave({
+    required String id,
+    required String tipe,
+    required String jenisIzin,
+    required String tanggalMulai,
+    required String tanggalSelesai,
+    required String keterangan,
+    File? fileBukti,
+  }) async {
+    try {
+      await remoteDataSource.updateLeave(
+        id: id,
+        tipe: tipe,
+        jenisIzin: jenisIzin,
+        tanggalMulai: tanggalMulai,
+        tanggalSelesai: tanggalSelesai,
+        keterangan: keterangan,
+        fileBukti: fileBukti,
+      );
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
 }

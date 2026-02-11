@@ -43,7 +43,7 @@ class CustomDropdown<T> extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
-          value: value,
+          value: items.map((e) => e.value).contains(value) ? value : null,
           isExpanded: true,
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,

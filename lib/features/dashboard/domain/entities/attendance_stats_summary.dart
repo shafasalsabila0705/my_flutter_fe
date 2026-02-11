@@ -7,6 +7,7 @@ class AttendanceStatsSummary extends Equatable {
   final int permission;
   final int leave;
   final int unknown;
+  final int notPresent; // Added
   final int total;
   final int presentPercentage;
 
@@ -17,6 +18,7 @@ class AttendanceStatsSummary extends Equatable {
     required this.permission,
     required this.leave,
     required this.unknown,
+    required this.notPresent,
     required this.total,
     required this.presentPercentage,
   });
@@ -29,6 +31,7 @@ class AttendanceStatsSummary extends Equatable {
     permission,
     leave,
     unknown,
+    notPresent,
     total,
     presentPercentage,
   ];

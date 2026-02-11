@@ -84,7 +84,14 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
                         const SizedBox(height: 60),
                         _buildFilterTabs(),
                         const SizedBox(height: 10),
-                        Expanded(child: _buildVerificationList()),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              _refreshVerification();
+                            },
+                            child: _buildVerificationList(),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -236,6 +243,7 @@ class _LeaveVerificationPageState extends State<LeaveVerificationPage> {
         }
 
         return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
           itemCount: filteredList.length,
           itemBuilder: (context, index) {

@@ -82,7 +82,14 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
                         const SizedBox(height: 60),
                         _buildFilterTabs(),
                         const SizedBox(height: 10),
-                        Expanded(child: _buildVerificationList()),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              _refreshVerification();
+                            },
+                            child: _buildVerificationList(),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -240,6 +247,7 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
         }
 
         return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
           itemCount: filteredList.length,
           itemBuilder: (context, index) {
