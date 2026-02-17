@@ -349,7 +349,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
                   const SizedBox(height: 12),
                   _buildCompactRow(
                     Icons.note_alt_outlined,
-                    "Alasan",
+                      "Alasan",
                     item.keterangan!,
                   ),
                 ],
@@ -357,49 +357,58 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
             ),
           ),
 
-          // Actions: ONLY for "MENUNGGU" and specific types (BIMTEK, TUBEL, DINAS LUAR)
-          if (status == "MENUNGGU" &&
-              [
-                "BIMTEK",
-                "TUBEL",
-                "DINAS LUAR",
-              ].contains((item.jenisIzin ?? "").toUpperCase())) ...[
-            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton.icon(
-                    onPressed: () => _handleEdit(item),
-                    icon: const Icon(Icons.edit_rounded, size: 18),
-                    label: const Text("Edit"),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryBlue,
+            // Actions: for "MENUNGGU" (Pending) and "DISETUJUI" (Approved)
+            if (status == "MENUNGGU" || status.contains("DISETUJUI")) ...[
+              const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // Edit only for MENUNGGU
+                    if (status == "MENUNGGU") ...[
+                      TextButton.icon(
+                        onPressed: () => _handleEdit(item),
+                        icon: const Icon(Icons.edit_rounded, size: 18),
+                        label: const Text("Edit"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    // Cancel for both (different label/logic)
+                    TextButton.icon(
+                      onPressed: () => _handleCancel(item),
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      label: Text(
+                        status == "MENUNGGU"
+                            ? "Batalkan"
+                            : "Ajukan Pembatalan",
+                      ),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () => _handleCancel(item),
-                    icon: const Icon(Icons.cancel_outlined, size: 18),
-                    label: const Text("Batalkan"),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+
   }
 
   Future<void> _handleCancel(Perizinan item) async {
+    String status = item.status?.toUpperCase() ?? "MENUNGGU";
+    String message = status == "MENUNGGU"
+        ? "Yakin ingin membatalkan pengajuan ini?"
+        : "Yakin ingin mengajukan pembatalan untuk izin yang sudah disetujui ini?";
+
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Konfirmasi"),
-        content: const Text("Yakin ingin membatalkan pengajuan ini?"),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -408,9 +417,9 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              "Ya, Batalkan",
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              status == "MENUNGGU" ? "Ya, Batalkan" : "Ya, Ajukan",
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],

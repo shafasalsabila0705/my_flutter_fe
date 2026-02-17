@@ -906,11 +906,65 @@ class _AttendanceActionsState extends State<AttendanceActions> {
     } catch (e) {
       if (!mounted) return;
       String errorMsg = e.toString();
-      // Ignore silent errors (Holiday Prevention handled by controller dialog)
+      
+      // Ignore silent errors
       if (errorMsg.contains("Holiday Prevention") ||
           errorMsg.contains("Holiday prevention")) {
         return;
       }
+
+      // Check for Fake GPS Error
+      if (errorMsg.contains("Fake GPS") || errorMsg.contains("lokasi palsu")) {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.red,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Akses Ditolak",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    errorMsg.replaceAll('Exception: ', ''),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("Tutup"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Gagal: $errorMsg")));

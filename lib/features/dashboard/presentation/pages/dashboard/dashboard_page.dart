@@ -64,6 +64,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       }
     });
 
+    // Listen to Dashboard State errors
+    ref.listen(dashboardProvider, (previous, next) {
+      // Only show if error is new or changed and not null
+      if (next.errorMessage != null &&
+          next.errorMessage != previous?.errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,

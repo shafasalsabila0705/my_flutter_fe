@@ -6,6 +6,7 @@ import '../../../domain/entities/perizinan.dart';
 import '../../../data/models/perizinan_model.dart';
 import 'cuti_detail_verification_page.dart';
 import '../../../../../../core/utils/status_helper.dart';
+import '../../../../../../core/utils/date_helper.dart'; // Added Import
 
 class AttendanceVerificationPage extends StatefulWidget {
   const AttendanceVerificationPage({super.key});
@@ -273,6 +274,7 @@ class _AttendanceVerificationPageState
                 "status": item.status ?? "-",
                 "reason": item.keterangan ?? "-",
                 "fileBukti": item.fileBukti ?? "",
+                "category": "KOREKSI",
               },
             ),
           ),
@@ -339,7 +341,7 @@ class _AttendanceVerificationPageState
                     (item.jenisIzin ?? "-").toUpperCase().replaceAll('_', ' '),
                   ),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Tanggal", item.tanggalMulai ?? "-"),
+                  _buildDetailRow("Tanggal", DateHelper.formatDate(item.tanggalMulai)),
                   // For attendance corrections, Start/End are usually same day
                   const SizedBox(height: 8),
                   _buildDetailRow(

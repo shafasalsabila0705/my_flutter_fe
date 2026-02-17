@@ -6,6 +6,8 @@ import '../../../../../../injection_container.dart';
 import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/repositories/koreksi_repository.dart';
 import '../../../../../../core/network/api_client.dart'; // Added Import
+import '../../../domain/entities/request_type.dart'; // Added RequestType import
+import '../../../../../../core/utils/date_helper.dart'; // Added Import
 
 class CutiDetailVerificationPage extends StatelessWidget {
   final Map<String, String> data;
@@ -16,6 +18,18 @@ class CutiDetailVerificationPage extends StatelessWidget {
     required this.data,
     this.isCorrection = false,
   });
+
+  String _getRequestLabel(String? type) {
+    if (type == null) return "Jenis Pengajuan";
+    
+    // Check for explicit category first
+    if (type.toUpperCase() == 'CUTI') return RequestType.cuti.label;
+    if (type.toUpperCase() == 'IZIN') return RequestType.izin.label;
+    if (type.toUpperCase() == 'KOREKSI') return RequestType.koreksi.label;
+
+    // Fallback to parsing the type string
+    return RequestType.fromString(type).label;
+  }
 
   Future<void> _processVerification(
     BuildContext context,
@@ -116,16 +130,39 @@ class CutiDetailVerificationPage extends StatelessWidget {
     final String fileBukti = data['fileBukti'] ?? '';
 
     // Determine Title
-    String title = "Verifikasi Cuti Bawahan";
-    String type = data['type'] ?? "";
-    if (type.toUpperCase().contains("TERLAMBAT") ||
-        type.toUpperCase().contains("PULANG") ||
-        type.toUpperCase().contains("TL") ||
-        type.toUpperCase().contains("CP")) {
-      title = "Verifikasi Izin TL/CP";
-    } else if (type.toUpperCase().contains("LUAR") ||
-        type.toUpperCase().contains("RADIUS")) {
-      title = "Verifikasi Absen Luar Kantor";
+    String title = "Detail Pengajuan";
+    String category = (data['category'] ?? "").toUpperCase();
+    String type = (data['type'] ?? "").toUpperCase();
+
+    if (category == 'CUTI') {
+      title = "Verifikasi Cuti Bawahan";
+    } else if (category == 'IZIN') {
+      title = "Verifikasi Izin Bawahan";
+    } else if (category == 'KOREKSI' || category == 'ATTENDANCE') {
+      if (type.contains("TERLAMBAT") ||
+          type.contains("PULANG") ||
+          type.contains("TL") ||
+          type.contains("CP")) {
+        title = "Verifikasi Izin TL/CP";
+      } else if (type.contains("LUAR") || type.contains("RADIUS")) {
+        title = "Verifikasi Absen Luar Kantor";
+      } else {
+        title = "Verifikasi Koreksi Absen";
+      }
+    } else {
+      // Fallback based on type if category is missing or unknown
+      if (type.contains("CUTI")) {
+        title = "Verifikasi Cuti Bawahan";
+      } else if (type.contains("TERLAMBAT") ||
+          type.contains("PULANG") ||
+          type.contains("TL") ||
+          type.contains("CP")) {
+        title = "Verifikasi Izin TL/CP";
+      } else if (type.contains("LUAR") || type.contains("RADIUS")) {
+        title = "Verifikasi Absen Luar Kantor";
+      } else {
+        title = "Verifikasi Izin Bawahan"; // Default fallback
+      }
     }
 
     return Scaffold(
@@ -185,7 +222,7 @@ class CutiDetailVerificationPage extends StatelessWidget {
                               fileBukti.toLowerCase() != "null") ...[
                             _buildEvidenceImage(
                               fileBukti,
-                              data['startDate'] ?? "-",
+                              DateHelper.formatDate(data['startDate']),
                             ),
                             const SizedBox(height: 24),
                           ],
@@ -200,14 +237,17 @@ class CutiDetailVerificationPage extends StatelessWidget {
                           const SizedBox(height: 20),
 
                           _buildInfoSection("Detail Izin", [
-                            _buildInfoRow("Jenis Cuti", data['type'] ?? "-"),
+                            _buildInfoRow(
+                              _getRequestLabel(data['category'] ?? data['type']),
+                              data['type'] ?? "-",
+                            ),
                             _buildInfoRow(
                               "Tanggal Mulai",
-                              data['startDate'] ?? "-",
+                              DateHelper.formatDate(data['startDate']),
                             ),
                             _buildInfoRow(
                               "Tanggal Selesai",
-                              data['endDate'] ?? "-",
+                              DateHelper.formatDate(data['endDate']),
                             ),
                             _buildInfoRow(
                               "Alasan",

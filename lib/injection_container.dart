@@ -131,7 +131,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => LocationService());
 
   // Define Base URLs
-  String baseUrl = 'http://172.23.14.163:3000';
+  String baseUrl = 'http://192.168.151.70:3000';
 
   try {
     if (Platform.isAndroid) {

@@ -74,12 +74,19 @@ class LocationService {
     if (!hasPermission) return null;
 
     try {
-      return await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
       );
+
+      if (position.isMocked) {
+        throw 'Terdeteksi penggunaan lokasi palsu (Fake GPS). Mohon matikan aplikasi Fake GPS Anda untuk melanjutkan absensi.';
+      }
+
+      return position;
     } catch (e) {
+      if (e is String) rethrow; // Forward our custom error
       return null;
     }
   }

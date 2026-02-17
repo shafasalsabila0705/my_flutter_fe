@@ -8,6 +8,7 @@ import '../pages/attendance_history/cuti_history_page.dart';
 import '../../../../../../core/providers/user_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
+import '../../../../../../core/services/location_service.dart'; // Added Import
 
 class ServiceMenu extends ConsumerWidget {
   const ServiceMenu({super.key});
@@ -239,23 +240,97 @@ class ServiceMenu extends ConsumerWidget {
                 );
               }
 
+              // Helper for Location Validation
+              Future<void> checkLocation(
+                BuildContext context,
+                VoidCallback onSafe,
+              ) async {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+
+                try {
+                  // This will throw if Mock Location is detected
+                  await LocationService().getCurrentPosition();
+                  if (context.mounted) Navigator.pop(context); // Dismiss Loading
+                  onSafe();
+                } catch (e) {
+                  if (context.mounted) Navigator.pop(context); // Dismiss Loading
+                  if (context.mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.red,
+                                size: 48,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "Akses Ditolak",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                e.toString(),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text("Tutup"),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              }
+
               // Row 1 Items
               final r1i1 = buildItem(
                 AppIcons.calendar,
                 'Presensi',
                 const Color(0xFF4FC3F7), // Light Blue
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AttendanceHistoryPage(),
-                  ),
-                ),
+                () => checkLocation(context, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AttendanceHistoryPage(),
+                    ),
+                  );
+                }),
               );
               final r1i2 = buildItem(
                 AppIcons.plane,
                 'e-Cuti',
                 const Color(0xFF4FC3F7), // Light Blue
-                () {
+                () => checkLocation(context, () {
                   final user = ref.read(userProvider).currentUser;
                   final permissions = user?.permissions ?? [];
                   final role = user?.role ?? '';
@@ -279,7 +354,7 @@ class ServiceMenu extends ConsumerWidget {
                       ),
                     );
                   }
-                },
+                }),
               );
               final r1i3 = buildItem(
                 AppIcons.money,

@@ -5,6 +5,7 @@ import '../../../domain/repositories/leave_repository.dart';
 import '../../../domain/entities/perizinan.dart';
 import 'cuti_detail_verification_page.dart';
 import '../../../../../../core/utils/status_helper.dart';
+import '../../../../../../core/utils/date_helper.dart'; // Added Import
 
 class CutiVerificationPage extends StatefulWidget {
   const CutiVerificationPage({super.key});
@@ -276,6 +277,7 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
                 "status": StatusHelper.mapStatusToIndonesian(item.status),
                 "reason": item.keterangan ?? "-",
                 "fileBukti": item.fileBukti ?? "",
+                "category": "CUTI",
               },
             ),
           ),
@@ -340,11 +342,11 @@ class _CutiVerificationPageState extends State<CutiVerificationPage> {
                 children: [
                   _buildDetailRow("Jenis Cuti", item.jenisIzin ?? "-"),
                   const SizedBox(height: 8),
-                  _buildDetailRow("Tanggal Mulai", item.tanggalMulai ?? "-"),
+                  _buildDetailRow("Tanggal Mulai", DateHelper.formatDate(item.tanggalMulai)),
                   const SizedBox(height: 8),
                   _buildDetailRow(
                     "Tanggal Selesai",
-                    item.tanggalSelesai ?? "-",
+                    DateHelper.formatDate(item.tanggalSelesai),
                   ),
                   const SizedBox(height: 8),
                   _buildDetailRow(
