@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../../core/utils/date_helper.dart'; // Added Import
 import '../../../../../../core/widgets/glass_card.dart';
 import 'leave_application_page.dart';
 import '../../../../../../core/constants/colors.dart'; // Added Import
@@ -335,13 +336,13 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
                 _buildCompactRow(
                   Icons.calendar_today_rounded,
                   "Mulai",
-                  item.tanggalMulai ?? "-",
+                  DateHelper.formatDate(item.tanggalMulai),
                 ),
                 const SizedBox(height: 12),
                 _buildCompactRow(
                   Icons.event_busy_rounded,
                   "Selesai",
-                  item.tanggalSelesai ?? "-",
+                  DateHelper.formatDate(item.tanggalSelesai),
                 ),
                 if (item.keterangan != null &&
                     item.keterangan!.isNotEmpty &&
@@ -378,6 +379,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
                       const SizedBox(width: 8),
                     ],
                     // Cancel for both (different label/logic)
+                    if (!((item.tipe ?? "").toUpperCase() == 'KOREKSI' && status.contains("DISETUJUI")))
                     TextButton.icon(
                       onPressed: () => _handleCancel(item),
                       icon: const Icon(Icons.cancel_outlined, size: 18),
@@ -399,41 +401,91 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
   }
 
   Future<void> _handleCancel(Perizinan item) async {
+    final TextEditingController reasonController = TextEditingController();
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+
     String status = item.status?.toUpperCase() ?? "MENUNGGU";
-    String message = status == "MENUNGGU"
-        ? "Yakin ingin membatalkan pengajuan ini?"
-        : "Yakin ingin mengajukan pembatalan untuk izin yang sudah disetujui ini?";
+    String title = status == "MENUNGGU"
+        ? "Batalkan Pengajuan"
+        : "Ajukan Pembatalan";
 
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi"),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Tidak"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(
-              status == "MENUNGGU" ? "Ya, Batalkan" : "Ya, Ajukan",
-              style: const TextStyle(color: Colors.white),
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Apakah Anda yakin ingin membatalkan pengajuan ini? Mohon sertakan alasannya.",
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: reasonController,
+                  decoration: const InputDecoration(
+                    labelText: "Alasan Pembatalan",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Alasan wajib diisi";
+                    }
+                    return null;
+                  },
+                  maxLines: 3,
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Kembali"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(context, true);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                "Konfirmasi",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirm == true) {
+      final reason = reasonController.text;
       try {
-        if ((item.tipe ?? "").toUpperCase() == 'KOREKSI') {
+        // Show loading
+        if (mounted) {
+           showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        bool isKoreksi = (item.tipe ?? "").toUpperCase() == 'KOREKSI';
+        bool isPending = status == 'MENUNGGU' || status.contains('MENUNGGU');
+
+        if (isKoreksi && isPending) {
           await sl<AttendanceRepository>().cancelCorrection(item.id!);
         } else {
-          await sl<LeaveRepository>().cancelLeave(item.id!);
+          // Use POST /cancel for Approved Koreksi AND all Izin/Cuti
+          await sl<LeaveRepository>().cancelLeave(item.id!, reason);
         }
+
         if (mounted) {
+          Navigator.pop(context); // Hide loading
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Pengajuan berhasil dibatalkan")),
           );
@@ -441,6 +493,7 @@ class _LeaveHistoryPageState extends State<LeaveHistoryPage> {
         }
       } catch (e) {
         if (mounted) {
+          Navigator.pop(context); // Hide loading
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text("Gagal membatalkan: $e"),

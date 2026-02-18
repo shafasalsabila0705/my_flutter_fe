@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/perizinan_model.dart';
@@ -18,7 +19,8 @@ abstract class LeaveRemoteDataSource {
   Future<List<PerizinanModel>>
   getSubordinateRequests(); // /api/perizinan/bawahan
   Future<void> approveRequest(int id, String status); // /api/perizinan/approval
-  Future<void> cancelLeave(String id); // /api/perizinan/{id}
+  Future<void> cancelLeave(int id, String reason); // /api/perizinan/cancel/{id}
+  Future<void> approveCancelPerizinan(int id); // /api/perizinan/approve-cancel
   Future<void> updateLeave({
     required String id,
     required String tipe,
@@ -144,11 +146,49 @@ class LeaveRemoteDataSourceImpl implements LeaveRemoteDataSource {
   }
 
   @override
-  Future<void> cancelLeave(String id) async {
+  Future<void> cancelLeave(int id, String reason) async {
     try {
-      final response = await apiClient.delete('/api/perizinan/cuti/$id');
+      debugPrint("🚀 Attempting to cancel leave. ID: $id, Reason: $reason");
+      final response = await apiClient.post(
+        '/api/perizinan/cancel/$id',
+        data: {'alasan': reason},
+      );
+      debugPrint("🚀 Cancel Response: ${response.statusCode} - ${response.data}");
       if (response.statusCode != 200) {
         throw ServerException(response.statusMessage ?? 'Gagal membatalkan');
+      }
+    } on DioException catch (e) {
+      String errorMessage = 'Gagal membatalkan perizinan';
+      if (e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map) {
+          // Extract main message
+          errorMessage = data['message'] ?? data['error'] ?? errorMessage;
+          
+          // Append validation errors if any
+          if (data['errors'] != null) {
+            errorMessage += ': ${data['errors']}';
+          }
+        } else if (data is String) {
+          errorMessage = data;
+        }
+      }
+      throw ServerException(errorMessage);
+    } catch (e) {
+      debugPrint("❌ Cancel Error: $e");
+      throw ServerException(e.toString());
+    }
+  }
+  
+  @override
+  Future<void> approveCancelPerizinan(int id) async {
+    try {
+      final response = await apiClient.post(
+        '/api/perizinan/approve-cancel',
+        data: {'perizinan_id': id},
+      );
+      if (response.statusCode != 200) {
+        throw ServerException(response.statusMessage ?? 'Gagal menyetujui pembatalan');
       }
     } catch (e) {
       throw ServerException(e.toString());

@@ -1,4 +1,5 @@
 import '../../data/models/attendance_model.dart'; // Ideally entity
+import '../../data/models/schedule_item_model.dart';
 import '../entities/perizinan.dart';
 import '../entities/location_check.dart';
 import 'dart:io';
@@ -37,4 +38,5 @@ abstract class AttendanceRepository {
     File? bukti,
   });
   Future<LocationCheck> checkLocation(double lat, double long);
+  Future<List<ScheduleItemModel>> getMonthlySchedule(String month, String year);
 }

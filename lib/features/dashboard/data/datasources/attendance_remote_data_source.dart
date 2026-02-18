@@ -7,6 +7,7 @@ import '../../../../core/errors/exceptions.dart';
 import '../models/attendance_model.dart';
 import '../models/perizinan_model.dart';
 import '../models/location_check_model.dart';
+import '../models/schedule_item_model.dart';
 
 abstract class AttendanceRemoteDataSource {
   Future<AttendanceModel> checkIn(double lat, double long, {String? reason});
@@ -52,6 +53,7 @@ abstract class AttendanceRemoteDataSource {
     required String alasan,
     File? bukti,
   });
+  Future<List<ScheduleItemModel>> getMonthlySchedule(String month, String year);
   Future<LocationCheckModel> checkLocation(double lat, double long);
 }
 
@@ -619,6 +621,20 @@ class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
       if (response.statusCode != 200) {
         throw ServerException(response.statusMessage ?? 'Gagal membatalkan');
       }
+    } on DioException catch (e) {
+      String errorMessage = 'Gagal membatalkan koreksi';
+      if (e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map) {
+          errorMessage = data['message'] ?? data['error'] ?? errorMessage;
+          if (data['errors'] != null) {
+            errorMessage += ': ${data['errors']}';
+          }
+        } else if (data is String) {
+          errorMessage = data;
+        }
+      }
+      throw ServerException(errorMessage);
     } catch (e) {
       throw ServerException(e.toString());
     }
@@ -655,4 +671,27 @@ class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
       throw ServerException(e.toString());
     }
   }
+
+  @override
+  Future<List<ScheduleItemModel>> getMonthlySchedule(String month, String year) async {
+    try {
+      final response = await apiClient.get(
+        '/api/jadwal/saya',
+        queryParameters: {
+          'bulan': month,
+          'tahun': year,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data['data'];
+        return data.map((json) => ScheduleItemModel.fromJson(json)).toList();
+      } else {
+        throw ServerException(response.statusMessage ?? 'Gagal memuat jadwal');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
 }
+

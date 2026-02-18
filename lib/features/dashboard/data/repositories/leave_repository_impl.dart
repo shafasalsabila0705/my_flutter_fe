@@ -60,9 +60,18 @@ class LeaveRepositoryImpl implements LeaveRepository {
   }
 
   @override
-  Future<void> cancelLeave(String id) async {
+  Future<void> cancelLeave(String id, String reason) async {
     try {
-      await remoteDataSource.cancelLeave(id);
+      await remoteDataSource.cancelLeave(int.tryParse(id) ?? 0, reason);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> approveCancelPerizinan(int id) async {
+    try {
+      await remoteDataSource.approveCancelPerizinan(id);
     } catch (e) {
       throw ServerException(e.toString());
     }

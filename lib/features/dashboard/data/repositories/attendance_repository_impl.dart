@@ -3,6 +3,7 @@ import '../../domain/entities/perizinan.dart';
 import '../../domain/entities/location_check.dart';
 import '../datasources/attendance_remote_data_source.dart';
 import '../models/attendance_model.dart';
+import '../models/schedule_item_model.dart';
 import 'dart:io';
 
 class AttendanceRepositoryImpl implements AttendanceRepository {
@@ -180,6 +181,15 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         alasan: alasan,
         bukti: bukti,
       );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<ScheduleItemModel>> getMonthlySchedule(String month, String year) async {
+    try {
+      return await remoteDataSource.getMonthlySchedule(month, year);
     } catch (e) {
       rethrow;
     }

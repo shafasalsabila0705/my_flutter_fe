@@ -124,11 +124,14 @@ class CutiDetailVerificationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Check Status to determine if buttons should be shown
-    final bool isPending = (data['status'] ?? 'Menunggu')
-        .toUpperCase()
-        .contains('MENUNGGU'); // Robust check
+    final statusStr = (data['status'] ?? 'Menunggu').toUpperCase();
+    final bool isPending = statusStr.contains('MENUNGGU');
+    final bool isMembatalkan = statusStr.contains('MEMBATALKAN'); // New Status Check
+
     final String fileBukti = data['fileBukti'] ?? '';
 
+    // ... (Title logic remains same) ...
+    
     // Determine Title
     String title = "Detail Pengajuan";
     String category = (data['category'] ?? "").toUpperCase();
@@ -293,6 +296,23 @@ class CutiDetailVerificationPage extends StatelessWidget {
                                 ),
                               ],
                             ),
+                          
+                          // Approval Cancel Button
+                          if (isMembatalkan)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionButton(
+                                    text: "Setujui Pembatalan",
+                                    color: Colors.red,
+                                    onPressed: () {
+                                       _processCancellationApproval(context);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+
                           const SizedBox(height: 40),
                         ],
                       ),
@@ -313,6 +333,84 @@ class CutiDetailVerificationPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _processCancellationApproval(BuildContext context) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Setujui Pembatalan'),
+          content: const Text(
+            'Apakah Anda yakin ingin menyetujui pembatalan izin ini? Data izin akan dihapus.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Ya", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      if (!context.mounted) return;
+      try {
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
+        );
+
+        final int id = int.tryParse(data['id'] ?? '') ?? 0;
+
+        final repo = sl<LeaveRepository>();
+        await repo.approveCancelPerizinan(id);
+
+        // Hide loading
+        if (context.mounted) Navigator.pop(context);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Berhasil menyetujui pembatalan.",
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context); // Return to list
+        }
+      } catch (e) {
+        // Hide loading
+        if (context.mounted) Navigator.pop(context);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Gagal memproses: $e"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildAppBar(BuildContext context, String title) {

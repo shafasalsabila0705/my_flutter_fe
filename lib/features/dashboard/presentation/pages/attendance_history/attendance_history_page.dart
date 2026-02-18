@@ -1,13 +1,16 @@
-﻿import 'package:flutter/material.dart';
+﻿import '../../../../../../core/services/location_service.dart';
+import 'package:flutter/material.dart';
 import '../../../../../../core/widgets/glass_card.dart';
 import '../../../../../../core/widgets/custom_dropdown.dart';
 import '../../../../../../core/constants/colors.dart';
 import 'leave_menu_page.dart'; // Import custom page
 
 import '../../../../../../injection_container.dart';
+import '../../../data/datasources/attendance_remote_data_source.dart';
 import '../../../domain/repositories/attendance_repository.dart';
 import '../../../../auth/domain/repositories/auth_repository.dart'; // Import AuthRepository
 import '../../../data/models/attendance_model.dart';
+import '../../../data/models/schedule_item_model.dart'; // Ensure this is present
 import '../../../domain/entities/perizinan.dart';
 import 'package:intl/intl.dart';
 
@@ -126,8 +129,10 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   ];
 
   // Data Lists
-  List<AttendanceModel> _historyList = [];
+  List<HistoryDayItem> _historyList = []; // REFACTORED: Now uses HistoryDayItem
+  List<AttendanceModel> _rawHistory = []; // Store raw for other uses if needed
   List<Perizinan> _correctionList = [];
+  AttendanceRecapModel? _summaryRecap; // Added this missing variable
   bool _isLoading = true;
 
   bool _isCorrectionAlreadySubmitted(String? dateStr) {
@@ -189,40 +194,70 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     });
   }
 
-  List<AttendanceModel> _allHistory = []; // Store source of truth
+  List<HistoryDayItem> _allHistory = []; // Store source of truth
 
   Future<void> _fetchHistory() async {
     try {
       final repository = sl<AttendanceRepository>();
-      final history = await repository.getHistory();
-      final corrections = await repository.getCorrectionHistory(); // Added
+      
+      // Calculate Month/Year from _focusedDay (which syncs with dropdown)
+      final String monthStr = _focusedDay.month.toString().padLeft(2, '0');
+      final String yearStr = _focusedDay.year.toString();
 
-      List<AttendanceModel> finalList = List.from(history);
+      // Parallel execution
+      final results = await Future.wait([
+        repository.getHistory(),
+        repository.getCorrectionHistory(),
+        repository.getTodayStatus().catchError((e) {
+            debugPrint("Error fetching today status: $e");
+            return <String, dynamic>{}; 
+        }),
+        repository.getRecap(monthStr, yearStr).catchError((e) {
+            debugPrint("Error fetching recap for summary: $e");
+             return const AttendanceRecapModel(
+              present: 0, late: 0, permission: 0, leave: 0, 
+              alpha: 0, lateAllowed: 0, notPresent: 0, details: []
+            );
+        }),
+        repository.getMonthlySchedule(monthStr, yearStr).catchError((e) {
+            debugPrint("Error fetching monthly schedule: $e");
+            return <ScheduleItemModel>[];
+        }),
+      ]);
+
+      final history = results[0] as List<AttendanceModel>;
+      final corrections = results[1] as List<Perizinan>;
+      final todayMap = results[2] as Map<String, dynamic>;
+      final recap = results[3] as AttendanceRecapModel; 
+      final scheduleList = results[4] as List<ScheduleItemModel>;
+
+      List<AttendanceModel> attendanceList = List.from(history);
 
       try {
-        final todayMap = await repository.getTodayStatus();
         final status = todayMap['status'];
-
         if (status != 'BELUM_ABSEN' && todayMap['data'] != null) {
           final todayModel = AttendanceModel.fromJson(todayMap['data']);
-          bool exists = finalList.any((e) => e.date == todayModel.date);
+          bool exists = attendanceList.any((e) => e.date == todayModel.date);
           if (!exists) {
-            finalList.insert(0, todayModel);
+            attendanceList.insert(0, todayModel);
           }
         }
       } catch (e) {
         debugPrint("Error fetching today status: $e");
       }
 
+      // Process Data into HistoryDayItems using Schedule List (API) + Attendance
+      // Calculate month/year from _focusedDay as it syncs with selection
+      final processedItems = _processHistoryData(attendanceList, scheduleList, _focusedDay.month, _focusedDay.year);
+
       setState(() {
-        _allHistory = finalList; // Save unfiltered list
-        _correctionList = corrections; // Save corrections
+        _rawHistory = attendanceList; // Save raw attendance data
+        _allHistory = processedItems; // Save processed list (Schedule based)
+        _correctionList = corrections;
+        _summaryRecap = recap;
         _isLoading = false;
       });
-      // Do NOT filter immediately if we want "click Pilih" flow,
-      // BUT initially we should probably show something or show empty?
-      // User said "pilih bulan, klik pilih, baru muncul".
-      // Maybe initially show current month?
+      
       _applyFilter();
     } catch (e) {
       setState(() {
@@ -235,18 +270,85 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     }
   }
 
+  // --- DATA TRANSFORMATION LOGIC ---
+  List<HistoryDayItem> _processHistoryData(
+      List<AttendanceModel> attendanceData, List<ScheduleItemModel> scheduleList, int month, int year) {
+    
+    int daysInMonth = DateUtils.getDaysInMonth(year, month);
+    List<HistoryDayItem> processedList = [];
+
+    for (int i = 1; i <= daysInMonth; i++) {
+      String paramsDate = "$year-${month.toString().padLeft(2, '0')}-${i.toString().padLeft(2, '0')}";
+      DateTime currentDate = DateTime(year, month, i);
+
+      // 1. Find Schedule
+      ScheduleItemModel? scheduleItem;
+      try {
+        scheduleItem = scheduleList.firstWhere(
+          (s) => s.date == paramsDate, 
+          orElse: () => ScheduleItemModel(date: '', id: -1), 
+        );
+        if (scheduleItem.id == -1) scheduleItem = null;
+      } catch (_) {}
+
+      ScheduleModel? schedule;
+      bool isHoliday = false;
+
+      if (scheduleItem != null) {
+         String scheduleStatus = (scheduleItem.status ?? '').toUpperCase();
+         if (scheduleStatus == 'LIBUR' || scheduleItem.shiftName == 'LIBUR') {
+           isHoliday = true;
+         }
+         
+         // In new API, jam_masuk_shift is defined
+         schedule = ScheduleModel(
+           startTime: scheduleItem.shiftStart,
+           endTime: scheduleItem.shiftEnd,
+           isHoliday: isHoliday,
+           // Add name if needed? 
+         );
+      }
+
+      // 2. Find Attendance
+      AttendanceModel? match;
+      try {
+        match = attendanceData.firstWhere((a) => a.date == paramsDate);
+      } catch (_) {}
+
+      // 3. Determine Status
+      String status = "-"; 
+      if (match != null) {
+        status = match.status;
+      } else if (isHoliday) {
+        status = "LIBUR";
+      } else {
+        if (schedule != null && !isHoliday) {
+           status = "BELUM ABSEN";
+        } else {
+           status = "-";
+        }
+      }
+
+      processedList.add(HistoryDayItem(
+        date: currentDate,
+        rawDate: paramsDate,
+        schedule: schedule,
+        attendance: match,
+        status: status,
+      ));
+    }
+
+    // Sort Ascending (1 to 31)
+    return processedList;
+  }
+
   void _applyFilter() {
     setState(() {
       int monthIndex = _months.indexOf(_selectedMonth) + 1;
       _historyList = _allHistory.where((item) {
         try {
-          if (item.date == null) return false;
-          final date = DateTime.parse(item.date!);
-          // Filter by Month AND Year (assuming current year 2026 based on previous tasks)
-          // Ideally user should select year too, but for now we follow the month picker context
-          // We'll filter by month only for simplicity as requested, or check year if needed.
-          // Let's stick to Month matching for now.
-          return date.month == monthIndex;
+          // Date is already parsed in HistoryDayItem
+          return item.date.month == monthIndex;
         } catch (e) {
           return false;
         }
@@ -281,6 +383,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       return const Color(0xFFFFC107); // Amber/Yellow
     } else if (s.contains('ALPA') || s.contains('TANPA')) {
       return const Color(0xFFF44336); // Red
+    } else if (s.contains('LIBUR')) {
+      return const Color(0xFFE53935); // Red for Holiday
     }
     // Default / Belum Absen
     return const Color(0xFF757575);
@@ -1058,12 +1162,24 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     int totalWorkMinutes = 0;
     int workDaysCount = 0;
 
-    int currentYear = DateTime.now().year;
-    int currentMonthIndex = _months.indexOf(_selectedMonth) + 1;
-    int totalWorkingDays = _getWorkingDaysInMonth(
-      currentYear,
-      currentMonthIndex,
-    );
+    // Calculate Total Working Days from Backend Schedule
+    // Count items that have a schedule and are NOT holidays
+    int totalWorkingDays = _historyList.where((item) => 
+        item.schedule != null && !item.schedule!.isHoliday
+    ).length;
+
+    // Fallback if schedule is empty (e.g. error or first load), use dynamic calculation ??
+    // Actually, if schedule is empty, totalWorkingDays will be 0, which might be confusing.
+    // But since we rely on backend, 0 is technically the "backend truth" if it returns empty.
+    // However, to be safe during transition or error, we can keep the old method as fallback IF count is 0.
+    if (totalWorkingDays == 0) {
+      int currentYear = _focusedDay.year;
+      int currentMonthIndex = _focusedDay.month;
+       totalWorkingDays = _getWorkingDaysInMonth(
+        currentYear,
+        currentMonthIndex,
+      );
+    }
 
     for (var item in _historyList) {
       final status = (item.status).toUpperCase();
@@ -1094,10 +1210,23 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
         }
       }
 
-      final checkIn = parseTime(item.checkInTime);
-      final checkOut = parseTime(item.checkOutTime);
-      final scheduledIn = parseTime(item.scheduledCheckInTime ?? "08:00:00");
-      final scheduledOut = parseTime(item.scheduledCheckOutTime ?? "16:00:00");
+      final checkIn = parseTime(item.attendance?.checkInTime);
+      final checkOut = parseTime(item.attendance?.checkOutTime);
+      
+      // Use schedule model if available, otherwise fallback to attendance or default
+      String defIn = "08:00:00";
+      String defOut = "16:00:00";
+      
+      if (item.schedule != null) {
+        defIn = item.schedule!.startTime ?? defIn;
+        defOut = item.schedule!.endTime ?? defOut;
+      } else if (item.attendance != null) {
+        defIn = item.attendance!.scheduledCheckInTime ?? defIn;
+        defOut = item.attendance!.scheduledCheckOutTime ?? defOut;
+      }
+
+      final scheduledIn = parseTime(defIn);
+      final scheduledOut = parseTime(defOut);
 
       if (checkIn != null &&
           scheduledIn != null &&
@@ -1255,163 +1384,181 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       return const Center(child: Text("Belum ada riwayat absensi"));
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
-      itemCount: _historyList.length,
-      itemBuilder: (context, index) {
-        final item = _historyList[index];
-        final color = _getStatusColor(item.status) ?? Colors.grey;
-
-        // Parse date (Assuming 'YYYY-MM-DD' from API to 'dd' and 'MMM')
-        // Or using formatted string from API if available.
-        // Logic: if date is "2026-01-22", day is "22", month is "JAN".
-        String dateStr = item.date ?? "";
-        String dayNum = "";
-        String monthStr = "";
-        String dayName = "";
-
-        try {
-          if (dateStr.isNotEmpty) {
-            DateTime dt = DateTime.parse(dateStr);
-            dayNum = DateFormat('dd').format(dt);
-            monthStr = DateFormat('MMM').format(dt).toUpperCase();
-            dayName = DateFormat(
-              'EEEE',
-              'id_ID',
-            ).format(dt); // Requires setting locale
-          }
-        } catch (_) {
-          dayNum = dateStr; // Fallback
-        }
-
-        // Time logic: "08.00 - 16.00" or "08.00 - (-)"
-        String checkIn = item.checkInTime;
-        String checkOut = item.checkOutTime ?? "(-)";
-        if (checkOut.isEmpty || checkOut == "-") checkOut = "(-)";
-        String timeDisplay = "$checkIn - $checkOut";
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+    return Column(
+      children: [
+        // Table Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: InkWell(
-            onTap: () {
-              final s = item.status.toUpperCase();
-              if (s.contains('TERLAMBAT') ||
-                  s.contains('PULANG CEPAT') ||
-                  s.contains('CP')) {
-                if (_isCorrectionAlreadySubmitted(item.date)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Izin TL/CP sudah diajukan"),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                } else if (_isCorrectionAllowed(item.date)) {
-                  _showLateReasonModal(context, item.date ?? "");
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Batas pengajuan TL/CP (Minggu pertama bulan berikutnya) sudah berakhir.",
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Row(
-              children: [
-                // Colored Strip & Date
-                Container(
-                  width: 60,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.1), // Light bg
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(15),
-                      bottomLeft: Radius.circular(15),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        monthStr,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        dayNum,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Indicator Line
-                Container(width: 4, height: 60, color: color),
-                const SizedBox(width: 12),
-                // Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dayName.isNotEmpty ? dayName : (item.date ?? "-"),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      // Customized Display Logic
-                      Builder(
-                        builder: (context) {
-                          String displayStatus = item.status;
-                          final s = item.status.toUpperCase();
-                          if ((s.contains('BIMTEK') ||
-                                  s.contains('TUBEL') ||
-                                  s.contains('DINAS') ||
-                                  s.contains('LUAR')) &&
-                              !s.contains('TOLAK') &&
-                              !s.contains('MENUNGGU')) {
-                            displayStatus = "HADIR (${item.status})";
-                          }
-                          return Text(
-                            displayStatus,
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        timeDisplay,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            color: Colors.grey.shade100,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade300),
             ),
           ),
-        );
-      },
+          child: Row(
+            children: const [
+              SizedBox(width: 70, child: Text("Tanggal", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), // Widen for single line
+              Expanded(child: Center(child: Text("Waktu / Keterangan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+              SizedBox(width: 60, child: Center(child: Text("Status", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+            ],
+          ),
+        ),
+        
+        // List Items
+        Expanded(
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: _historyList.length,
+            itemBuilder: (context, index) {
+              final item = _historyList[index];
+              final date = item.date;
+              final dayNum = DateFormat('dd').format(date);
+              final dayName = DateFormat('EEEE', 'id_ID').format(date);
+              final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+              
+              // Determine logic
+              bool isHoliday = item.schedule?.isHoliday ?? false;
+              bool isWorkingDay = false;
+              if (item.schedule != null) {
+                isWorkingDay = !item.schedule!.isHoliday;
+              }
+
+              // Background Color Logic
+              // User: "setiap ngga ada jadwal dikasih tanda merah saja" -> Red mark for no schedule
+              // User: "kalau ada jadwal ... warna harinya itu putihh"
+              
+              Color bgColor = Colors.white;
+              if (item.schedule != null) {
+                // Has Schedule -> White (even if Holiday? User said "kalau ada jadwal... putih")
+                // Usually holidays are in schedule but marked as holiday.
+                if (item.schedule!.isHoliday) {
+                   bgColor = Colors.white; // Or maybe keep grey? Let's stick to "ada jadwal -> putih"
+                } else {
+                   bgColor = Colors.white; 
+                }
+              } else {
+                // No Schedule -> Red Mark
+                // Using a very light red/pink background to indicate "Tanda Merah"
+                bgColor = const Color(0xFFFFEBEE); // Red.shade50
+              }
+
+              // Middle Content Logic
+              String middleText = "-";
+              if (isHoliday) {
+                middleText = "Libur Nasional / Cuti Bersama"; // Or use item.schedule?.shiftName if it contains holiday name?
+              } else if (!isWorkingDay) {
+                middleText = dayName; // "Sabtu", "Minggu" etc.
+              } else {
+                // Working Day
+                if (item.attendance != null && (item.attendance?.checkInTime != null || item.attendance?.checkOutTime != null)) {
+                   // Show Attendance Time
+                   String checkIn = item.attendance?.checkInTime ?? "-";
+                   String checkOut = item.attendance?.checkOutTime ?? "-";
+                   if (checkOut == "") checkOut = "-";
+                   
+                   if (checkIn != "-" && checkOut == "-") {
+                      middleText = "$checkIn - ";
+                   } else if (checkIn == "-" && checkOut == "-") {
+                      middleText = "-";
+                   } else {
+                      middleText = "$checkIn - $checkOut";
+                   }
+                } else {
+                   // Scheduled but Not Absent -> "-"
+                   middleText = "-";
+                }
+              }
+
+              // Status Logic & Color (No change needed here, just contextual)
+              String statusText = "";
+              Color statusColor = Colors.transparent;
+              String rawStatus = (item.status).toUpperCase();
+
+              if (rawStatus.contains("TERLAMBAT") || rawStatus.contains("TL")) {
+                 statusText = "TL";
+                 statusColor = const Color(0xFFFFC107); // Yellow
+              } else if (rawStatus.contains("PULANG CEPAT") || rawStatus.contains("CP")) {
+                 statusText = "CP";
+                 statusColor = const Color(0xFFFFC107); // Yellow (Group with late as per request usually)
+              } else if (rawStatus.contains("CUTI")) {
+                 statusText = "CUTI";
+                 statusColor = const Color(0xFF9C27B0); // Purple
+              } else if (rawStatus.contains("IZIN")) {
+                 statusText = "IZIN";
+                 statusColor = const Color(0xFF009688); // Teal (Tosca)
+              } else if (rawStatus.contains("TO") || rawStatus.contains("ALPHA") || rawStatus.contains("TANPA") || rawStatus.contains("BELUM")) {
+                 // Only show 'TK' or 'A' if it's a working day and passed
+                 if (isWorkingDay && date.isBefore(DateTime.now())) {
+                    statusText = "TK";
+                    statusColor = Colors.red;
+                 }
+              } else if (rawStatus.contains("HADIR") || rawStatus.contains("TEPAT")) {
+                  // statusText = "H"; // Optional: User didn't specify color for Hadir list, implies maybe empty or standard?
+                  // Image shows empty for normal days, but let's show 'H' or check icon?
+                  // User Request: "jika keterangannya terlambat... cuti... izin... tanpa keterangan..."
+                  // Implies only abnormal statuses needs highlighting?
+                  // Let's leave empty if Hadir Tepat Waktu to be clean like image (rows 5,6,7 in image example have times but no status text).
+                  statusText = ""; 
+              }
+
+              // Override Middle Text for Belum Absen on working day
+              if (middleText == "-" && isWorkingDay && date.isBefore(DateTime.now())) {
+                 // Keep "-" or show "Belum Absen"? Image shows "-"
+              }
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Row(
+                  children: [
+                    // Date
+                    SizedBox(
+                      width: 70, 
+                      child: Text(
+                        dayNum, 
+                        style: TextStyle(
+                          color: (isHoliday) ? Colors.red : Colors.grey.shade700,
+                          fontWeight: FontWeight.w500
+                        )
+                      )
+                    ),
+                    // Content
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          middleText,
+                          style: TextStyle(
+                            color: (isHoliday) ? Colors.red : Colors.grey.shade800,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                    // Status
+                    SizedBox(
+                      width: 60,
+                      child: Center(
+                        child: Text(
+                          statusText,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1482,9 +1629,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                   d,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: (d == "Min" || d == "Sab")
-                        ? Colors.red
-                        : Colors.black87,
+                    color: Colors.black87,
                   ),
                 ),
               )
@@ -1523,39 +1668,79 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
               }
 
               // Check status from _historyList
-              // We need to match cellDate (YYYY-MM-DD) with item.date
-              AttendanceModel? dailyData;
+              HistoryDayItem? dailyData;
               try {
-                final dateKey = DateFormat('yyyy-MM-dd').format(cellDate);
-                dailyData = _historyList.firstWhere((e) => e.date == dateKey);
+                dailyData = _historyList.firstWhere((e) => 
+                  e.date.year == cellDate.year &&
+                  e.date.month == cellDate.month &&
+                  e.date.day == cellDate.day
+                );
               } catch (_) {
                 dailyData = null;
               }
 
-              Color? statusColor;
-              if (isCurrentMonth && dailyData != null) {
-                statusColor = _getStatusColor(dailyData.status);
-              }
+              // Color Logic
+              Color? cellColor = Colors.transparent;
+              Color textColor = Colors.black87;
 
-              // Highlight today if needed?
-              // For now just status.
+              if (isCurrentMonth) {
+                // Default Text Color: Black for Weekdays
+                // if (cellDate.weekday == DateTime.saturday || cellDate.weekday == DateTime.sunday) {
+                //   textColor = Colors.red;
+                // }
+
+                if (dailyData != null) {
+                  // 1. Background Logic (No Schedule -> Red Tint)
+                  bool hasSchedule = dailyData.schedule != null;
+                  
+                  if (!hasSchedule) {
+                    cellColor = const Color(0xFFFFEBEE); // Red shade 50
+                  } 
+                  
+                  // 2. Status Logic (Overrides Background)
+                  String status = dailyData.status.toUpperCase();
+                  if (status.contains("TERLAMBAT") || status.contains("TL")) {
+                     cellColor = const Color(0xFFFFC107); // Amber
+                     textColor = Colors.white;
+                  } else if (status.contains("PULANG CEPAT") || status.contains("CP")) {
+                     cellColor = const Color(0xFFFFC107);
+                     textColor = Colors.white; 
+                  } else if (status.contains("CUTI")) {
+                     cellColor = const Color(0xFF9C27B0); // Purple
+                     textColor = Colors.white;
+                  } else if (status.contains("IZIN")) {
+                     cellColor = const Color(0xFF009668); // Teal/Green
+                     textColor = Colors.white;
+                  } else if (status.contains("TK") || status.contains("TANPA") || status.contains("ALPHA")) {
+                      if (dailyData.date.isBefore(DateTime.now())) {
+                         cellColor = Colors.red;
+                         textColor = Colors.white;
+                      }
+                  } else if (status.contains("HADIR") || status.contains("TEPAT")) {
+                      // Optional: Green for Present? Or keep white/transparent?
+                      // User screenshot showed simple numbers for present/normal days.
+                      // List view logic matches this (no color).
+                  }
+                }
+              }
 
               return GestureDetector(
                 onTap: () {
                   if (isCurrentMonth && dailyData != null) {
                     final s = dailyData.status.toUpperCase();
+                    // Correction Logic
                     if (s.contains('TERLAMBAT') ||
                         s.contains('PULANG CEPAT') ||
                         s.contains('CP')) {
-                      if (_isCorrectionAlreadySubmitted(dailyData.date)) {
+                      if (_isCorrectionAlreadySubmitted(dailyData.rawDate)) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text("Izin TL/CP sudah diajukan"),
                             backgroundColor: Colors.orange,
                           ),
                         );
-                      } else if (_isCorrectionAllowed(dailyData.date)) {
-                        _showLateReasonModal(context, dailyData.date ?? "");
+                      } else if (_isCorrectionAllowed(dailyData.rawDate)) {
+                        _showLateReasonModal(context, dailyData.rawDate);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -1574,10 +1759,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: (statusColor != null)
-                          ? statusColor
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
+                      color: cellColor,
+                      borderRadius: BorderRadius.circular(8), // Match list view style roughly
                     ),
                     alignment: Alignment.center,
                     child: Column(
@@ -1586,18 +1769,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                         Text(
                           isCurrentMonth ? "$day" : "",
                           style: TextStyle(
-                            color: isCurrentMonth
-                                ? (statusColor != null
-                                      ? Colors.white
-                                      : (cellDate.weekday ==
-                                                DateTime.saturday ||
-                                            cellDate.weekday == DateTime.sunday)
-                                      ? Colors.red
-                                      : Colors.black)
-                                : Colors.transparent,
+                            color: isCurrentMonth ? textColor : Colors.transparent,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        // Today Indicator
                         if (isCurrentMonth &&
                             DateTime.now().year == cellDate.year &&
                             DateTime.now().month == cellDate.month &&
@@ -1606,8 +1782,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                             margin: const EdgeInsets.only(top: 2),
                             width: 4,
                             height: 4,
-                            decoration: const BoxDecoration(
-                              color: Colors.blue,
+                            decoration: BoxDecoration(
+                              color: textColor == Colors.white ? Colors.white : Colors.blue,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1700,6 +1876,45 @@ class CorrectionFormModal extends StatefulWidget {
   @override
   State<CorrectionFormModal> createState() => _CorrectionFormModalState();
 }
+
+// --- REFACTORED MODELS ---
+
+class ScheduleModel {
+  final String? startTime;
+  final String? endTime;
+  final String? shiftName;
+  final bool isHoliday;
+
+  ScheduleModel({
+    this.startTime,
+    this.endTime,
+    this.shiftName,
+    this.isHoliday = false,
+  });
+
+  String get formattedRange {
+    if (isHoliday) return "Hari Libur";
+    if (startTime == null || endTime == null) return "Jadwal Tidak Tersedia";
+    return "$startTime - $endTime";
+  }
+}
+
+class HistoryDayItem {
+  final DateTime date; // Parsed Date Object
+  final ScheduleModel? schedule;
+  final AttendanceModel? attendance;
+  final String status;
+  final String rawDate; // Original String Date
+
+  HistoryDayItem({
+    required this.date,
+    this.schedule,
+    this.attendance,
+    required this.status,
+    required this.rawDate,
+  });
+}
+
 
 class _CorrectionFormModalState extends State<CorrectionFormModal> {
   late Future<Map<String, dynamic>> _dataFuture;

@@ -13,7 +13,8 @@ abstract class LeaveRepository {
   Future<List<Perizinan>> getLeaveHistory();
   Future<List<Perizinan>> getSubordinateRequests();
   Future<void> approveRequest(int id, String status);
-  Future<void> cancelLeave(String id);
+  Future<void> cancelLeave(String id, String reason);
+  Future<void> approveCancelPerizinan(int id);
   Future<void> updateLeave({
     required String id,
     required String tipe,
